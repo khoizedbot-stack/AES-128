@@ -1,0 +1,24 @@
+INFO: [VRFC 10-2263] Analyzing Verilog file "E:/RTL/xtermhome/AES-128/aes128_encrpyt/add_round_key.v" into library xil_defaultlib
+INFO: [VRFC 10-311] analyzing module add_round_key
+INFO: [VRFC 10-2263] Analyzing Verilog file "E:/RTL/xtermhome/AES-128/aes128_encrpyt/aes128_axi_top.v" into library xil_defaultlib
+INFO: [VRFC 10-311] analyzing module aes128_axi_top
+INFO: [VRFC 10-2263] Analyzing Verilog file "E:/RTL/xtermhome/AES-128/aes128_encrpyt/aes128_fsm_core.v" into library xil_defaultlib
+INFO: [VRFC 10-311] analyzing module aes128_fsm_core
+INFO: [VRFC 10-2263] Analyzing Verilog file "E:/RTL/xtermhome/AES-128/aes128_encrpyt/axi4_lite_slave.v" into library xil_defaultlib
+INFO: [VRFC 10-311] analyzing module axi4_lite_slave
+INFO: [VRFC 10-2263] Analyzing Verilog file "E:/RTL/xtermhome/AES-128/aes128_encrpyt/encrypt_final_round.v" into library xil_defaultlib
+INFO: [VRFC 10-311] analyzing module encrypt_final_round
+INFO: [VRFC 10-2263] Analyzing Verilog file "E:/RTL/xtermhome/AES-128/aes128_encrpyt/encrypt_round.v" into library xil_defaultlib
+INFO: [VRFC 10-311] analyzing module encrypt_round
+INFO: [VRFC 10-2263] Analyzing Verilog file "E:/RTL/xtermhome/AES-128/aes128_encrpyt/expand_key_core_fix.v" into library xil_defaultlib
+INFO: [VRFC 10-311] analyzing module expand_key_core_fix
+INFO: [VRFC 10-2263] Analyzing Verilog file "E:/RTL/xtermhome/AES-128/aes128_encrpyt/expand_key_top.v" into library xil_defaultlib
+INFO: [VRFC 10-311] analyzing module expand_key_top
+INFO: [VRFC 10-2263] Analyzing Verilog file "E:/RTL/xtermhome/AES-128/aes128_encrpyt/mix_columns.v" into library xil_defaultlib
+INFO: [VRFC 10-311] analyzing module mix_columns
+INFO: [VRFC 10-2263] Analyzing Verilog file "E:/RTL/xtermhome/AES-128/aes128_encrpyt/shift_rows.v" into library xil_defaultlib
+INFO: [VRFC 10-311] analyzing module shift_rows
+INFO: [VRFC 10-2263] Analyzing Verilog file "E:/RTL/xtermhome/AES-128/aes128_encrpyt/sub_bytes.v" into library xil_defaultlib
+INFO: [VRFC 10-311] analyzing module sub_bytes
+INFO: [VRFC 10-2263] Analyzing Verilog file "C:/Users/Admin/Downloads/tb_aes128_axi.v" into library xil_defaultlib
+INFO: [VRFC 10-311] analyzing module tb_aes128_axi

@@ -1,0 +1,20 @@
+# compile verilog/system verilog design source files
+verilog xil_defaultlib  --include "../../../../../../../../../Vivado/2025.2/Vivado/data/rsb/busdef" \
+"../../../../../../aes128_encrpyt/add_round_key.v" \
+"../../../../../../aes128_encrpyt/aes128_axi_top.v" \
+"../../../../../../aes128_encrpyt/aes128_fsm_core.v" \
+"../../../../../../aes128_encrpyt/axi4_lite_slave.v" \
+"../../../../../../aes128_encrpyt/encrypt_final_round.v" \
+"../../../../../../aes128_encrpyt/encrypt_round.v" \
+"../../../../../../aes128_encrpyt/expand_key_core_fix.v" \
+"../../../../../../aes128_encrpyt/expand_key_top.v" \
+"../../../../../../aes128_encrpyt/mix_columns.v" \
+"../../../../../../aes128_encrpyt/shift_rows.v" \
+"../../../../../../aes128_encrpyt/sub_bytes.v" \
+"C:/Users/Admin/Downloads/tb_aes128_axi.v" \
+
+# compile glbl module
+verilog xil_defaultlib "glbl.v"
+
+# Do not sort compile order
+nosort
