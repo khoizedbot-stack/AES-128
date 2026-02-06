@@ -1,4 +1,61 @@
+#==============================================================================
+# AES-128 IP Core - .gitignore
+#==============================================================================
+
+# === OS / Editor ===
+.vscode/
+*.swp
+*~
+Thumbs.db
+.DS_Store
+
+# === Compiled/Object files ===
 *.o
 *.out
 *.exe
-.vscode/
+
+# === Vivado Generated (IP Packaging Project) ===
+AES-128/AES-128/AES-128.cache/
+AES-128/AES-128/AES-128.hw/
+AES-128/AES-128/AES-128.ip_user_files/
+AES-128/AES-128/AES-128.runs/
+AES-128/AES-128/AES-128.sim/
+AES-128/AES-128/AES-128.gen/
+AES-128/AES-128/*.jou
+AES-128/AES-128/*.log
+AES-128/AES-128/.Xil/
+
+# === Vivado Generated (SoC Project) ===
+AES-128_SoC/AES-128_SoC.cache/
+AES-128_SoC/AES-128_SoC.hw/
+AES-128_SoC/AES-128_SoC.ip_user_files/
+AES-128_SoC/AES-128_SoC.runs/
+AES-128_SoC/AES-128_SoC.sim/
+AES-128_SoC/AES-128_SoC.gen/
+AES-128_SoC/*.jou
+AES-128_SoC/*.log
+AES-128_SoC/.Xil/
+AES-128_SoC/.rigel_lopper/
+
+# === Vitis Generated ===
+AES-128_SoC/aes/build/
+AES-128_SoC/aes/export/
+AES-128_SoC/aes/logs/
+AES-128_SoC/aes_128/build/
+AES-128_SoC/aes_128/.cache/
+AES-128_SoC/aes_128/.clangd
+AES-128_SoC/aes_128/.compile_commands/
+AES-128_SoC/aes_128/compile_commands.json
+AES-128_SoC/_ide/logs/
+AES-128_SoC/_ide/.wsdata
+
+# === Vivado common patterns ===
+*.jou
+*.log
+*.str
+*.wdb
+*.wdf
+.Xil/
+*.pb
+webtalk*/
+usage_statistics_webtalk.*

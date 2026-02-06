@@ -675,47 +675,47 @@
     <spirit:fileSet>
       <spirit:name>xilinx_anylanguagesynthesis_view_fileset</spirit:name>
       <spirit:file>
-        <spirit:name>aes128_encrpyt/add_round_key.v</spirit:name>
+        <spirit:name>hdl/add_round_key.v</spirit:name>
         <spirit:fileType>verilogSource</spirit:fileType>
       </spirit:file>
       <spirit:file>
-        <spirit:name>aes128_encrpyt/aes128_fsm_core.v</spirit:name>
+        <spirit:name>hdl/aes128_fsm_core.v</spirit:name>
         <spirit:fileType>verilogSource</spirit:fileType>
       </spirit:file>
       <spirit:file>
-        <spirit:name>aes128_encrpyt/axi4_lite_slave.v</spirit:name>
+        <spirit:name>hdl/axi4_lite_slave.v</spirit:name>
         <spirit:fileType>verilogSource</spirit:fileType>
       </spirit:file>
       <spirit:file>
-        <spirit:name>aes128_encrpyt/encrypt_final_round.v</spirit:name>
+        <spirit:name>hdl/encrypt_final_round.v</spirit:name>
         <spirit:fileType>verilogSource</spirit:fileType>
       </spirit:file>
       <spirit:file>
-        <spirit:name>aes128_encrpyt/encrypt_round.v</spirit:name>
+        <spirit:name>hdl/encrypt_round.v</spirit:name>
         <spirit:fileType>verilogSource</spirit:fileType>
       </spirit:file>
       <spirit:file>
-        <spirit:name>aes128_encrpyt/expand_key_core_fix.v</spirit:name>
+        <spirit:name>hdl/expand_key_core_fix.v</spirit:name>
         <spirit:fileType>verilogSource</spirit:fileType>
       </spirit:file>
       <spirit:file>
-        <spirit:name>aes128_encrpyt/expand_key_top.v</spirit:name>
+        <spirit:name>hdl/expand_key_top.v</spirit:name>
         <spirit:fileType>verilogSource</spirit:fileType>
       </spirit:file>
       <spirit:file>
-        <spirit:name>aes128_encrpyt/mix_columns.v</spirit:name>
+        <spirit:name>hdl/mix_columns.v</spirit:name>
         <spirit:fileType>verilogSource</spirit:fileType>
       </spirit:file>
       <spirit:file>
-        <spirit:name>aes128_encrpyt/shift_rows.v</spirit:name>
+        <spirit:name>hdl/shift_rows.v</spirit:name>
         <spirit:fileType>verilogSource</spirit:fileType>
       </spirit:file>
       <spirit:file>
-        <spirit:name>aes128_encrpyt/sub_bytes.v</spirit:name>
+        <spirit:name>hdl/sub_bytes.v</spirit:name>
         <spirit:fileType>verilogSource</spirit:fileType>
       </spirit:file>
       <spirit:file>
-        <spirit:name>aes128_encrpyt/aes128_axi_top.v</spirit:name>
+        <spirit:name>hdl/aes128_axi_top.v</spirit:name>
         <spirit:fileType>verilogSource</spirit:fileType>
         <spirit:userFileType>CHECKSUM_7ca76428</spirit:userFileType>
       </spirit:file>
@@ -723,59 +723,56 @@
     <spirit:fileSet>
       <spirit:name>xilinx_anylanguagebehavioralsimulation_view_fileset</spirit:name>
       <spirit:file>
-        <spirit:name>aes128_encrpyt/add_round_key.v</spirit:name>
+        <spirit:name>hdl/add_round_key.v</spirit:name>
         <spirit:fileType>verilogSource</spirit:fileType>
       </spirit:file>
       <spirit:file>
-        <spirit:name>aes128_encrpyt/aes128_fsm_core.v</spirit:name>
+        <spirit:name>hdl/aes128_fsm_core.v</spirit:name>
         <spirit:fileType>verilogSource</spirit:fileType>
       </spirit:file>
       <spirit:file>
-        <spirit:name>aes128_encrpyt/axi4_lite_slave.v</spirit:name>
+        <spirit:name>hdl/axi4_lite_slave.v</spirit:name>
         <spirit:fileType>verilogSource</spirit:fileType>
       </spirit:file>
       <spirit:file>
-        <spirit:name>aes128_encrpyt/encrypt_final_round.v</spirit:name>
+        <spirit:name>hdl/encrypt_final_round.v</spirit:name>
         <spirit:fileType>verilogSource</spirit:fileType>
       </spirit:file>
       <spirit:file>
-        <spirit:name>aes128_encrpyt/encrypt_round.v</spirit:name>
+        <spirit:name>hdl/encrypt_round.v</spirit:name>
         <spirit:fileType>verilogSource</spirit:fileType>
       </spirit:file>
       <spirit:file>
-        <spirit:name>aes128_encrpyt/expand_key_core_fix.v</spirit:name>
+        <spirit:name>hdl/expand_key_core_fix.v</spirit:name>
         <spirit:fileType>verilogSource</spirit:fileType>
       </spirit:file>
       <spirit:file>
-        <spirit:name>aes128_encrpyt/expand_key_top.v</spirit:name>
+        <spirit:name>hdl/expand_key_top.v</spirit:name>
         <spirit:fileType>verilogSource</spirit:fileType>
       </spirit:file>
       <spirit:file>
-        <spirit:name>aes128_encrpyt/mix_columns.v</spirit:name>
+        <spirit:name>hdl/mix_columns.v</spirit:name>
         <spirit:fileType>verilogSource</spirit:fileType>
       </spirit:file>
       <spirit:file>
-        <spirit:name>aes128_encrpyt/shift_rows.v</spirit:name>
+        <spirit:name>hdl/shift_rows.v</spirit:name>
         <spirit:fileType>verilogSource</spirit:fileType>
       </spirit:file>
       <spirit:file>
-        <spirit:name>aes128_encrpyt/sub_bytes.v</spirit:name>
+        <spirit:name>hdl/sub_bytes.v</spirit:name>
         <spirit:fileType>verilogSource</spirit:fileType>
       </spirit:file>
       <spirit:file>
-        <spirit:name>aes128_encrpyt/aes128_axi_top.v</spirit:name>
+        <spirit:name>hdl/aes128_axi_top.v</spirit:name>
         <spirit:fileType>verilogSource</spirit:fileType>
       </spirit:file>
     </spirit:fileSet>
     <spirit:fileSet>
       <spirit:name>xilinx_testbench_view_fileset</spirit:name>
       <spirit:file>
-        <spirit:name>src/tb_aes128_axi.v</spirit:name>
+        <spirit:name>sim/tb_aes128_axi.v</spirit:name>
         <spirit:fileType>verilogSource</spirit:fileType>
-        <spirit:userFileType>IMPORTED_FILE</spirit:userFileType>
-        <spirit:userFileType>USED_IN_implementation</spirit:userFileType>
         <spirit:userFileType>USED_IN_simulation</spirit:userFileType>
-        <spirit:userFileType>USED_IN_synthesis</spirit:userFileType>
       </spirit:file>
     </spirit:fileSet>
     <spirit:fileSet>
