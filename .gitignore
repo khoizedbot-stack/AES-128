@@ -49,13 +49,26 @@ AES-128_SoC/aes_128/compile_commands.json
 AES-128_SoC/_ide/logs/
 AES-128_SoC/_ide/.wsdata
 
+# === Simulation artifacts ===
+*.vcd
+*.wdb
+*.wdf
+*.sdb
+*.pb
+*.obj
+xsim.dir/
+*.prj
+*.bat
+
 # === Vivado common patterns ===
 *.jou
 *.log
 *.str
-*.wdb
-*.wdf
 .Xil/
-*.pb
 webtalk*/
 usage_statistics_webtalk.*
+*.backup.jou
+*.backup.log
+hbs.jou
+hbs.log
+vivado_pid*.str
