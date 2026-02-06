@@ -59,6 +59,10 @@ AES-128_SoC/_ide/.wsdata
 xsim.dir/
 *.prj
 *.bat
+*.vvp
+sim.log
+transcript
+work/
 
 # === Vivado common patterns ===
 *.jou

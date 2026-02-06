@@ -1,0 +1,105 @@
+name: AES-128 RTL Simulation
+
+on:
+  push:
+    branches: [ develop, main ]
+    paths:
+      - 'hdl/**'
+      - 'sim/**'
+      - 'compile.f'
+      - '.github/workflows/**'
+  pull_request:
+    branches: [ develop, main ]
+
+jobs:
+  simulate:
+    name: Icarus Verilog Simulation
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Install Icarus Verilog
+      run: |
+        sudo apt-get update -qq
+        sudo apt-get install -y iverilog
+        iverilog -V
+    
+    - name: Compile RTL sources
+      run: |
+        echo "📦 Compiling AES-128 IP core..."
+        iverilog -g2012 -Wall -o sim.vvp \
+          hdl/sub_bytes.v \
+          hdl/shift_rows.v \
+          hdl/mix_columns.v \
+          hdl/add_round_key.v \
+          hdl/encrypt_round.v \
+          hdl/encrypt_final_round.v \
+          hdl/expand_key_core_fix.v \
+          hdl/expand_key_top.v \
+          hdl/aes128_fsm_core.v \
+          hdl/axi4_lite_slave.v \
+          hdl/aes128_axi_top.v \
+          sim/tb_aes128_axi.v
+        echo "✅ Compilation successful"
+    
+    - name: Run testbench
+      id: sim
+      run: |
+        echo "🧪 Running AXI4-Lite testbench..."
+        timeout 60s vvp sim.vvp | tee sim.log
+        echo "✅ Simulation completed"
+    
+    - name: Check test results
+      run: |
+        echo "📊 Analyzing results..."
+        if grep -i "error" sim.log; then
+          echo "❌ Errors detected in simulation"
+          exit 1
+        fi
+        
+        passed=$(grep -c "PASSED" sim.log || echo 0)
+        failed=$(grep -c "FAILED" sim.log || echo 0)
+        
+        echo "✅ Tests passed: $passed"
+        echo "❌ Tests failed: $failed"
+        
+        if [ "$failed" -gt 0 ]; then
+          echo "::error::$failed test(s) failed"
+          exit 1
+        fi
+        
+        if [ "$passed" -eq 0 ]; then
+          echo "::warning::No test results found"
+          exit 1
+        fi
+        
+        echo "🎉 All $passed tests passed!"
+    
+    - name: Upload simulation artifacts
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: simulation-results
+        path: |
+          sim.log
+          *.vcd
+          *.vvp
+        retention-days: 7
+    
+    - name: Summary
+      if: always()
+      run: |
+        echo "### 📋 Simulation Summary" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "- **Project**: AES-128 IP Core" >> $GITHUB_STEP_SUMMARY
+        echo "- **Testbench**: tb_aes128_axi" >> $GITHUB_STEP_SUMMARY
+        echo "- **Simulator**: Icarus Verilog $(iverilog -V | head -1)" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        
+        if [ -f sim.log ]; then
+          passed=$(grep -c "PASSED" sim.log || echo 0)
+          failed=$(grep -c "FAILED" sim.log || echo 0)
+          echo "**Results**: ✅ $passed passed, ❌ $failed failed" >> $GITHUB_STEP_SUMMARY
+        fi
