@@ -1,0 +1,3 @@
+[submodule "AES-128_SoC"]
+	path = AES-128_SoC
+	url = git@github.com:khoizedbot-stack/AES-128_SoC.git
