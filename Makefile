@@ -1,85 +1,63 @@
-##################################################################################################
-#This file created by Huy Nguyen
-#Created date: 7/1/2019
-#Example run string: make {optional} TESTNAME={name_of_testcase} 
-#		     make all TESTNAME=test_reg 
-##################################################################################################
-#Define variables
-TESTNAME 	?= default_value_test
-TB_NAME 	?= tb_aes128_axi
-RADIX		?= hexadecimal
-REGRESS_LIST	?= regress.list
-SRCLIST_V_T	?= compile
-#macro_en	?= +define+write_enable
-macro_en	?=
-#================================================================================================
-all: build run
-regression: build create_test_list regress report
-regression_cov: build create_test_list regress_cov  gen_cov
+################################################################################
+# FLEXIBLE MAKEFILE FOR AES-128
+# Usage:
+#   1. make all                  -> Chạy tất cả các testbench trong danh sách
+#   2. make tb_aes128_optimized  -> Chỉ chạy testbench này
+#   3. make tb_aes128_axi        -> Chỉ chạy testbench kia
+################################################################################
 
-build:
-	mkdir -p log
-	touch run_test.vt
-	vlib.exe work
-	vmap.exe work work
-	vlog.exe -coveropt 3 +cover +acc -f $(SRCLIST_V_T).f
-run:	
-	vlog.exe $(macro_en) -f compile.f
-	vsim.exe -l $(TESTNAME).log -voptargs=+acc -assertdebug -c $(TB_NAME) -do "log -r /*;run -all;"
-	mv $(TESTNAME).log ./log
-	cp -rf  vsim.wlf $(TESTNAME).wlf
-	mv $(TESTNAME).wlf ./log
-	ln -sf ./log/$(TESTNAME).log sim.log
-#	vsim.exe -coverage -vopt work.test_counter -c -do "coverage save -onexit -directive -codeAll counter.ucdb;run -all"
-#	vcover.exe report -html counter.ucdb
-find:
-	find sim
-create_test_list:  
-	find sim -type f -name "*.v" -printf "%f\n" |sed 's/.v//' | tee $(REGRESS_LIST) | wc -l
+# --- CẤU HÌNH DANH SÁCH TESTBENCH (Thêm tên module testbench vào đây) ---
+# Lưu ý: Đây là tên MODULE trong file Verilog, không phải tên file .v
+TEST_LIST = tb_aes128_axi_optimized tb_aes128_optimized
 
-regress:
-	#make run TESTNAME=`cat $(REGRESS_LIST) |sed -n 1p $(REGRESS_LIST)`
-	#make run TESTNAME=`cat $(REGRESS_LIST) |sed -n 2p $(REGRESS_LIST)`
-	#make run TESTNAME=`cat $(REGRESS_LIST) |sed -n 3p $(REGRESS_LIST)`
-	#make run TESTNAME=`cat $(REGRESS_LIST) |sed -n 4p $(REGRESS_LIST)`
-	#make run TESTNAME=`cat $(REGRESS_LIST) |sed -n 5p $(REGRESS_LIST)`
-	#make run TESTNAME=`cat $(REGRESS_LIST) |sed -n 6p $(REGRESS_LIST)`
-	#make run TESTNAME=`cat $(REGRESS_LIST) |sed -n 7p $(REGRESS_LIST)`
-	#make run TESTNAME=`cat $(REGRESS_LIST) |sed -n 8p $(REGRESS_LIST)`
-	./run_all.sh run
+# --- CÁC BIẾN MẶC ĐỊNH ---
+COMPILE_LIST = compile.f
+LOG_DIR      = log
+LIB_NAME     = work
+
+# --- MỤC TIÊU CHÍNH (ALL) ---
+# Khi gõ 'make all', nó sẽ gọi target 'compile' trước, sau đó gọi list các test
+all: compile $(TEST_LIST)
+
+# --- BƯỚC 1: BIÊN DỊCH (COMPILE) ---
+compile:
+	@echo "========================================"
+	@echo "      COMPILING DESIGN & TESTBENCH      "
+	@echo "========================================"
+	mkdir -p $(LOG_DIR)
+	if [ ! -d "$(LIB_NAME)" ]; then vlib.exe $(LIB_NAME); fi
+	vmap.exe $(LIB_NAME) $(LIB_NAME)
+	vlog.exe -coveropt 3 +cover +acc -f $(COMPILE_LIST)
+
+# --- BƯỚC 2: CHẠY TESTBENCH (DYNAMIC RULE) ---
+# Đây là phần quan trọng nhất.
+# Nó định nghĩa quy tắc cho tất cả các tên nằm trong biến $(TEST_LIST)
+$(TEST_LIST): compile
+	@echo "----------------------------------------"
+	@echo " RUNNING TEST: $@"
+	@echo "----------------------------------------"
+	# $@ chính là tên target bạn gõ (ví dụ: tb_aes128_optimized)
+	vsim.exe -l $(LOG_DIR)/$@.log \
+             -voptargs=+acc -assertdebug \
+             -c $@ \
+             -do "log -r /*; run -all; quit"
 	
-regress_cov:
-	#make run_cov TESTNAME=`cat $(REGRESS_LIST) |sed -n 1p $(REGRESS_LIST)`
-	#make run_cov TESTNAME=`cat $(REGRESS_LIST) |sed -n 2p $(REGRESS_LIST)`
-	#make run_cov TESTNAME=`cat $(REGRESS_LIST) |sed -n 3p $(REGRESS_LIST)`
-	#make run_cov TESTNAME=`cat $(REGRESS_LIST) |sed -n 4p $(REGRESS_LIST)`
-	#make run_cov TESTNAME=`cat $(REGRESS_LIST) |sed -n 5p $(REGRESS_LIST)`
-	#make run_cov TESTNAME=`cat $(REGRESS_LIST) |sed -n 6p $(REGRESS_LIST)`
-	#make run_cov TESTNAME=`cat $(REGRESS_LIST) |sed -n 7p $(REGRESS_LIST)`
-	#make run_cov TESTNAME=`cat $(REGRESS_LIST) |sed -n 8p $(REGRESS_LIST)`
-	./run_all.sh run_cov
-wave:
-	vsim.exe -i -view vsim.wlf -do "add wave vsim:/$(TB_NAME)/*; radix -$(RADIX)"
+	@# Lưu waveform
+	cp -rf vsim.wlf $(LOG_DIR)/$@.wlf
+	@echo "Log saved to: $(LOG_DIR)/$@.log"
 
-run_cov:
-	vlog.exe +cover=sbceftx -f compile.f
-	vsim.exe -coverage -l $(TESTNAME).log -c $(TB_NAME) -voptargs="+cover=bcesfx" -novopt -assertdebug -do "coverage save -onexit $(TESTNAME).ucdb; log -r -d 6 /*;run -all"
-	mv $(TESTNAME).log ./log
-gen_cov:
-	mkdir -p coverage
-	vcover.exe merge IP.ucdb *.ucdb
-	vcover.exe report IP.ucdb -file coverage/summary_report.txt
-	vcover.exe report -zeros -details -code bcefsx -All -codeAll IP.ucdb -file coverage/detail_report.txt
+# --- TIỆN ÍCH KHÁC ---
+
+# Mở sóng (Waveform) cho file cụ thể. VD: make wave TEST=tb_aes128_optimized
+wave:
+	vsim.exe -i -view $(LOG_DIR)/$(TEST).wlf -do "add wave vsim:/$(TEST)/*; radix -hex"
+
 clean:
-	rm -rf work
-	rm -rf log
-	rm -rf *.ini
-	rm -rf *.log
-	rm -rf *.wlf
-	rm -rf transcript
-	rm -rf coverage
-	rm -rf *.ucdb
-	rm -rf *.list
-	rm -rf *.vt
+	rm -rf $(LIB_NAME)
+	rm -rf $(LOG_DIR)
+	rm -rf *.ini *.log *.wlf transcript coverage *.ucdb
+
+# Báo cáo nhanh kết quả Pass/Fail
 report:
-	grep "passed" ./log/*.log -R 
+	@echo "--- SUMMARY REPORT ---"
+	@grep -E "PASS|FAIL|Error" $(LOG_DIR)/*.log || echo "No logs found."
