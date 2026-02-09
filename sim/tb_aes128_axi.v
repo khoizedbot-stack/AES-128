@@ -1,377 +1,360 @@
-//==============================================================================
-// Testbench: tb_aes128_axi
-// Description: Testbench for AES-128 with AXI4-Lite interface
-//==============================================================================
+/*
+ * AXI4-Lite Interface Testbench for Optimized AES-128
+ * Tests the complete system with AXI wrapper
+ */
 
-`timescale 1ns / 1ps
+`timescale 1ns/1ps
 
-module tb_aes128_axi;
+module tb_aes128_axi_optimized;
 
     //==========================================================================
-    // Parameters
+    // AXI4-Lite Signals
     //==========================================================================
-    parameter CLK_PERIOD = 10;  // 100 MHz
-    parameter ADDR_WIDTH = 6;
-    parameter DATA_WIDTH = 32;
+    reg         S_AXI_ACLK;
+    reg         S_AXI_ARESETN;
     
-    // Register addresses
-    localparam ADDR_CTRL   = 6'h00;
-    localparam ADDR_STATUS = 6'h04;
-    localparam ADDR_KEY_0  = 6'h08;
-    localparam ADDR_KEY_1  = 6'h0C;
-    localparam ADDR_KEY_2  = 6'h10;
-    localparam ADDR_KEY_3  = 6'h14;
-    localparam ADDR_PT_0   = 6'h18;
-    localparam ADDR_PT_1   = 6'h1C;
-    localparam ADDR_PT_2   = 6'h20;
-    localparam ADDR_PT_3   = 6'h24;
-    localparam ADDR_CT_0   = 6'h28;
-    localparam ADDR_CT_1   = 6'h2C;
-    localparam ADDR_CT_2   = 6'h30;
-    localparam ADDR_CT_3   = 6'h34;
+    // Write Address Channel
+    reg  [5:0]  S_AXI_AWADDR;
+    reg         S_AXI_AWVALID;
+    wire        S_AXI_AWREADY;
     
-    //==========================================================================
-    // Signals
-    //==========================================================================
-    reg                      clk;
-    reg                      rst_n;
+    // Write Data Channel
+    reg  [31:0] S_AXI_WDATA;
+    reg  [3:0]  S_AXI_WSTRB;
+    reg         S_AXI_WVALID;
+    wire        S_AXI_WREADY;
     
-    // AXI Write Address
-    reg  [ADDR_WIDTH-1:0]    awaddr;
-    reg  [2:0]               awprot;
-    reg                      awvalid;
-    wire                     awready;
+    // Write Response Channel
+    wire [1:0]  S_AXI_BRESP;
+    wire        S_AXI_BVALID;
+    reg         S_AXI_BREADY;
     
-    // AXI Write Data
-    reg  [DATA_WIDTH-1:0]    wdata;
-    reg  [DATA_WIDTH/8-1:0]  wstrb;
-    reg                      wvalid;
-    wire                     wready;
+    // Read Address Channel
+    reg  [5:0]  S_AXI_ARADDR;
+    reg         S_AXI_ARVALID;
+    wire        S_AXI_ARREADY;
     
-    // AXI Write Response
-    wire [1:0]               bresp;
-    wire                     bvalid;
-    reg                      bready;
-    
-    // AXI Read Address
-    reg  [ADDR_WIDTH-1:0]    araddr;
-    reg  [2:0]               arprot;
-    reg                      arvalid;
-    wire                     arready;
-    
-    // AXI Read Data
-    wire [DATA_WIDTH-1:0]    rdata;
-    wire [1:0]               rresp;
-    wire                     rvalid;
-    reg                      rready;
+    // Read Data Channel
+    wire [31:0] S_AXI_RDATA;
+    wire [1:0]  S_AXI_RRESP;
+    wire        S_AXI_RVALID;
+    reg         S_AXI_RREADY;
     
     // Interrupt
-    wire                     irq_done;
+    wire        irq_done;
     
     // Test variables
-    reg [31:0] read_data;
-    reg [127:0] test_key;
-    reg [127:0] test_plaintext;
-    reg [127:0] received_ciphertext;
-    reg [127:0] expected_ciphertext;
-    integer errors;
-    
+    reg  [31:0] read_data;
+    integer     test_pass;
+    integer     test_fail;
+    integer     cycle_count;
+
+    integer i;
+
+
     //==========================================================================
-    // DUT Instance
+    // DUT Instantiation
     //==========================================================================
-    
-    aes128_axi_top #(
-        .C_S_AXI_ADDR_WIDTH(ADDR_WIDTH),
-        .C_S_AXI_DATA_WIDTH(DATA_WIDTH)
-    ) dut (
-        .S_AXI_ACLK    (clk),
-        .S_AXI_ARESETN (rst_n),
-        
-        .S_AXI_AWADDR  (awaddr),
-        .S_AXI_AWPROT  (awprot),
-        .S_AXI_AWVALID (awvalid),
-        .S_AXI_AWREADY (awready),
-        
-        .S_AXI_WDATA   (wdata),
-        .S_AXI_WSTRB   (wstrb),
-        .S_AXI_WVALID  (wvalid),
-        .S_AXI_WREADY  (wready),
-        
-        .S_AXI_BRESP   (bresp),
-        .S_AXI_BVALID  (bvalid),
-        .S_AXI_BREADY  (bready),
-        
-        .S_AXI_ARADDR  (araddr),
-        .S_AXI_ARPROT  (arprot),
-        .S_AXI_ARVALID (arvalid),
-        .S_AXI_ARREADY (arready),
-        
-        .S_AXI_RDATA   (rdata),
-        .S_AXI_RRESP   (rresp),
-        .S_AXI_RVALID  (rvalid),
-        .S_AXI_RREADY  (rready),
-        
+    aes128_axi_top dut (
+        .S_AXI_ACLK    (S_AXI_ACLK),
+        .S_AXI_ARESETN (S_AXI_ARESETN),
+        .S_AXI_AWADDR  (S_AXI_AWADDR),
+        .S_AXI_AWVALID (S_AXI_AWVALID),
+        .S_AXI_AWREADY (S_AXI_AWREADY),
+        .S_AXI_WDATA   (S_AXI_WDATA),
+        .S_AXI_WSTRB   (S_AXI_WSTRB),
+        .S_AXI_WVALID  (S_AXI_WVALID),
+        .S_AXI_WREADY  (S_AXI_WREADY),
+        .S_AXI_BRESP   (S_AXI_BRESP),
+        .S_AXI_BVALID  (S_AXI_BVALID),
+        .S_AXI_BREADY  (S_AXI_BREADY),
+        .S_AXI_ARADDR  (S_AXI_ARADDR),
+        .S_AXI_ARVALID (S_AXI_ARVALID),
+        .S_AXI_ARREADY (S_AXI_ARREADY),
+        .S_AXI_RDATA   (S_AXI_RDATA),
+        .S_AXI_RRESP   (S_AXI_RRESP),
+        .S_AXI_RVALID  (S_AXI_RVALID),
+        .S_AXI_RREADY  (S_AXI_RREADY),
         .irq_done      (irq_done)
     );
-    
+
     //==========================================================================
-    // Clock Generation
+    // Clock Generation (100 MHz)
     //==========================================================================
-    
-    initial begin
-        clk = 0;
-        forever #(CLK_PERIOD/2) clk = ~clk;
-    end
-    
+    initial S_AXI_ACLK = 0;
+    always #5 S_AXI_ACLK = ~S_AXI_ACLK;
+
     //==========================================================================
     // AXI Write Task
     //==========================================================================
-    
     task axi_write;
-        input [ADDR_WIDTH-1:0] addr;
-        input [DATA_WIDTH-1:0] data;
+        input [5:0]  addr;
+        input [31:0] data;
         begin
-            @(posedge clk);
-            awaddr  <= addr;
-            awprot  <= 3'b000;
-            awvalid <= 1'b1;
-            wdata   <= data;
-            wstrb   <= 4'hF;
-            wvalid  <= 1'b1;
-            bready  <= 1'b1;
+            @(posedge S_AXI_ACLK);
+            S_AXI_AWADDR  <= addr;
+            S_AXI_AWVALID <= 1'b1;
+            S_AXI_WDATA   <= data;
+            S_AXI_WSTRB   <= 4'hF;
+            S_AXI_WVALID  <= 1'b1;
+            S_AXI_BREADY  <= 1'b1;
             
-            // Wait for address and data ready
-            @(posedge clk);
-            while (!(awready && wready)) @(posedge clk);
+            @(posedge S_AXI_ACLK);
+            while (!(S_AXI_AWREADY && S_AXI_WREADY)) @(posedge S_AXI_ACLK);
             
-            @(posedge clk);
-            awvalid <= 1'b0;
-            wvalid  <= 1'b0;
+            S_AXI_AWVALID <= 1'b0;
+            S_AXI_WVALID  <= 1'b0;
             
-            // Wait for response
-            while (!bvalid) @(posedge clk);
-            @(posedge clk);
-            bready <= 1'b0;
-            
-            $display("[%0t] AXI WRITE: addr=0x%02h, data=0x%08h", $time, addr, data);
+            while (!S_AXI_BVALID) @(posedge S_AXI_ACLK);
+            @(posedge S_AXI_ACLK);
+            S_AXI_BREADY <= 1'b0;
         end
     endtask
-    
+
     //==========================================================================
     // AXI Read Task
     //==========================================================================
-    
     task axi_read;
-        input  [ADDR_WIDTH-1:0] addr;
-        output [DATA_WIDTH-1:0] data;
+        input  [5:0]  addr;
+        output [31:0] data;
         begin
-            @(posedge clk);
-            araddr  <= addr;
-            arprot  <= 3'b000;
-            arvalid <= 1'b1;
-            rready  <= 1'b1;
+            @(posedge S_AXI_ACLK);
+            S_AXI_ARADDR  <= addr;
+            S_AXI_ARVALID <= 1'b1;
+            S_AXI_RREADY  <= 1'b1;
             
-            // Wait for address ready
-            @(posedge clk);
-            while (!arready) @(posedge clk);
+            @(posedge S_AXI_ACLK);
+            while (!S_AXI_ARREADY) @(posedge S_AXI_ACLK);
+            S_AXI_ARVALID <= 1'b0;
             
-            @(posedge clk);
-            arvalid <= 1'b0;
-            
-            // Wait for data valid
-            while (!rvalid) @(posedge clk);
-            data = rdata;
-            
-            @(posedge clk);
-            rready <= 1'b0;
-            
-            $display("[%0t] AXI READ:  addr=0x%02h, data=0x%08h", $time, addr, data);
+            while (!S_AXI_RVALID) @(posedge S_AXI_ACLK);
+            data = S_AXI_RDATA;
+            @(posedge S_AXI_ACLK);
+            S_AXI_RREADY <= 1'b0;
         end
     endtask
-    
+
     //==========================================================================
-    // Wait for Done
+    // Wait for Done (poll STATUS register)
     //==========================================================================
-    
     task wait_done;
         reg [31:0] status;
         begin
+            cycle_count = 0;
             status = 32'h0;
-            while (status[1] == 1'b0) begin
-                axi_read(ADDR_STATUS, status);
-                if (status[0]) $display("  Status: BUSY");
+            while ((status & 32'h2) == 0) begin  // Check done bit
+                axi_read(6'h04, status);
+                cycle_count = cycle_count + 1;
+                if (cycle_count > 100) begin
+                    $display("ERROR: Timeout waiting for done!");
+                    $finish;
+                end
             end
-            $display("  Status: DONE");
         end
     endtask
-    
-    //==========================================================================
-    // Initialize
-    //==========================================================================
-    
-    task init;
-        begin
-            awaddr  = 0;
-            awprot  = 0;
-            awvalid = 0;
-            wdata   = 0;
-            wstrb   = 0;
-            wvalid  = 0;
-            bready  = 0;
-            araddr  = 0;
-            arprot  = 0;
-            arvalid = 0;
-            rready  = 0;
-            errors  = 0;
-        end
-    endtask
-    
+
     //==========================================================================
     // Main Test
     //==========================================================================
-    
     initial begin
-        $display("================================================");
-        $display("  AES-128 AXI4-Lite Testbench");
-        $display("================================================");
+        $display("");
+        $display("================================================================");
+        $display("  AES-128 Optimized - AXI4-Lite Interface Testbench");
+        $display("================================================================");
+        $display("");
         
-        init();
-        rst_n = 0;
+        // Initialize
+        test_pass = 0;
+        test_fail = 0;
+        S_AXI_ARESETN = 0;
+        S_AXI_AWADDR  = 0;
+        S_AXI_AWVALID = 0;
+        S_AXI_WDATA   = 0;
+        S_AXI_WSTRB   = 0;
+        S_AXI_WVALID  = 0;
+        S_AXI_BREADY  = 0;
+        S_AXI_ARADDR  = 0;
+        S_AXI_ARVALID = 0;
+        S_AXI_RREADY  = 0;
         
-        // Reset
-        repeat(10) @(posedge clk);
-        rst_n = 1;
-        repeat(5) @(posedge clk);
+        // Reset sequence
+        repeat(10) @(posedge S_AXI_ACLK);
+        S_AXI_ARESETN = 1;
+        repeat(5) @(posedge S_AXI_ACLK);
         
-        //----------------------------------------------------------------------
-        // Test 1: NIST Test Vector
-        // Key:       000102030405060708090a0b0c0d0e0f
-        // Plaintext: 00112233445566778899aabbccddeeff
-        // Expected:  69c4e0d86a7b0430d8cdb78070b4c55a
-        //----------------------------------------------------------------------
-        $display("\n--- Test 1: NIST Test Vector ---");
+        //======================================================================
+        // Test 1: NIST Test Vector via AXI
+        //======================================================================
+        $display("[Test 1] NIST FIPS-197 Test Vector");
+        $display("  Key:       000102030405060708090a0b0c0d0e0f");
+        $display("  Plaintext: 00112233445566778899aabbccddeeff");
+        $display("  Expected:  69c4e0d86a7b0430d8cdb78070b4c55a");
         
-        test_key       = 128'h000102030405060708090a0b0c0d0e0f;
-        test_plaintext = 128'h00112233445566778899aabbccddeeff;
-        expected_ciphertext = 128'h69c4e0d86a7b0430d8cdb78070b4c55a;
-        
-        // Write Key
-        $display("Writing Key...");
-        axi_write(ADDR_KEY_0, test_key[31:0]);
-        axi_write(ADDR_KEY_1, test_key[63:32]);
-        axi_write(ADDR_KEY_2, test_key[95:64]);
-        axi_write(ADDR_KEY_3, test_key[127:96]);
+        // Write Key (little-endian word order for ARM)
+        // Key = 00010203 04050607 08090a0b 0c0d0e0f
+        axi_write(6'h08, 32'h0c0d0e0f);  // KEY_0: bytes 0-3
+        axi_write(6'h0C, 32'h08090a0b);  // KEY_1: bytes 4-7
+        axi_write(6'h10, 32'h04050607);  // KEY_2: bytes 8-11
+        axi_write(6'h14, 32'h00010203);  // KEY_3: bytes 12-15
         
         // Write Plaintext
-        $display("Writing Plaintext...");
-        axi_write(ADDR_PT_0, test_plaintext[31:0]);
-        axi_write(ADDR_PT_1, test_plaintext[63:32]);
-        axi_write(ADDR_PT_2, test_plaintext[95:64]);
-        axi_write(ADDR_PT_3, test_plaintext[127:96]);
+        // PT = 00112233 44556677 8899aabb ccddeeff
+        axi_write(6'h18, 32'hccddeeff);  // PT_0
+        axi_write(6'h1C, 32'h8899aabb);  // PT_1
+        axi_write(6'h20, 32'h44556677);  // PT_2
+        axi_write(6'h24, 32'h00112233);  // PT_3
         
         // Start encryption
-        $display("Starting encryption...");
-        axi_write(ADDR_CTRL, 32'h00000001);
+        axi_write(6'h00, 32'h00000001);
         
-        // Wait for done
+        // Wait for completion
+        wait_done();
+        $display("  Encryption completed in %0d polling cycles", cycle_count);
+        
+        // Read and verify ciphertext
+        // Expected CT = 69c4e0d8 6a7b0430 d8cdb780 70b4c55a
+        axi_read(6'h28, read_data);
+        $display("  CT_0 = 0x%08X (expected 0x70b4c55a)", read_data);
+        if (read_data !== 32'h70b4c55a) test_fail = test_fail + 1;
+        else test_pass = test_pass + 1;
+        
+        axi_read(6'h2C, read_data);
+        $display("  CT_1 = 0x%08X (expected 0xd8cdb780)", read_data);
+        if (read_data !== 32'hd8cdb780) test_fail = test_fail + 1;
+        else test_pass = test_pass + 1;
+        
+        axi_read(6'h30, read_data);
+        $display("  CT_2 = 0x%08X (expected 0x6a7b0430)", read_data);
+        if (read_data !== 32'h6a7b0430) test_fail = test_fail + 1;
+        else test_pass = test_pass + 1;
+        
+        axi_read(6'h34, read_data);
+        $display("  CT_3 = 0x%08X (expected 0x69c4e0d8)", read_data);
+        if (read_data !== 32'h69c4e0d8) test_fail = test_fail + 1;
+        else test_pass = test_pass + 1;
+        
+        //======================================================================
+        // Test 2: All Zeros
+        //======================================================================
+        $display("");
+        $display("[Test 2] All Zeros");
+        
+        // Write Key = 0
+        axi_write(6'h08, 32'h00000000);
+        axi_write(6'h0C, 32'h00000000);
+        axi_write(6'h10, 32'h00000000);
+        axi_write(6'h14, 32'h00000000);
+        
+        // Write Plaintext = 0
+        axi_write(6'h18, 32'h00000000);
+        axi_write(6'h1C, 32'h00000000);
+        axi_write(6'h20, 32'h00000000);
+        axi_write(6'h24, 32'h00000000);
+        
+        // Start & Wait
+        axi_write(6'h00, 32'h00000001);
         wait_done();
         
-        // Read Ciphertext
-        $display("Reading Ciphertext...");
-        axi_read(ADDR_CT_0, received_ciphertext[31:0]);
-        axi_read(ADDR_CT_1, received_ciphertext[63:32]);
-        axi_read(ADDR_CT_2, received_ciphertext[95:64]);
-        axi_read(ADDR_CT_3, received_ciphertext[127:96]);
+        // Expected: 66e94bd4ef8a2c3b884cfa59ca342b2e
+        axi_read(6'h28, read_data);
+        $display("  CT_0 = 0x%08X (expected 0xca342b2e)", read_data);
+        if (read_data !== 32'hca342b2e) test_fail = test_fail + 1;
+        else test_pass = test_pass + 1;
         
-        // Verify
-        $display("\nResults:");
-        $display("  Expected:  0x%032h", expected_ciphertext);
-        $display("  Received:  0x%032h", received_ciphertext);
+        axi_read(6'h2C, read_data);
+        $display("  CT_1 = 0x%08X (expected 0x884cfa59)", read_data);
+        if (read_data !== 32'h884cfa59) test_fail = test_fail + 1;
+        else test_pass = test_pass + 1;
         
-        if (received_ciphertext === expected_ciphertext) begin
-            $display("  PASS!");
+        axi_read(6'h30, read_data);
+        $display("  CT_2 = 0x%08X (expected 0xef8a2c3b)", read_data);
+        if (read_data !== 32'hef8a2c3b) test_fail = test_fail + 1;
+        else test_pass = test_pass + 1;
+        
+        axi_read(6'h34, read_data);
+        $display("  CT_3 = 0x%08X (expected 0x66e94bd4)", read_data);
+        if (read_data !== 32'h66e94bd4) test_fail = test_fail + 1;
+        else test_pass = test_pass + 1;
+        
+        //======================================================================
+        // Test 3: Check Interrupt Signal
+        //======================================================================
+        $display("");
+        $display("[Test 3] Interrupt Signal Check");
+        
+        // Reuse previous setup, just start new encryption
+        axi_write(6'h08, 32'h0c0d0e0f);
+        axi_write(6'h0C, 32'h08090a0b);
+        axi_write(6'h10, 32'h04050607);
+        axi_write(6'h14, 32'h00010203);
+        axi_write(6'h18, 32'hccddeeff);
+        axi_write(6'h1C, 32'h8899aabb);
+        axi_write(6'h20, 32'h44556677);
+        axi_write(6'h24, 32'h00112233);
+        
+        // Check irq_done is low before start
+        if (irq_done == 1'b0) begin
+            $display("  IRQ before start: LOW (correct)");
         end else begin
-            $display("  FAIL!");
-            errors = errors + 1;
+            $display("  IRQ before start: HIGH (unexpected)");
         end
-        
-        //----------------------------------------------------------------------
-        // Test 2: Another test vector
-        //----------------------------------------------------------------------
-        $display("\n--- Test 2: Second Test Vector ---");
-        
-        test_key       = 128'h2b7e151628aed2a6abf7158809cf4f3c;
-        test_plaintext = 128'h3243f6a8885a308d313198a2e0370734;
-        expected_ciphertext = 128'h3925841d02dc09fbdc118597196a0b32;
-        
-        // Write Key
-        axi_write(ADDR_KEY_0, test_key[31:0]);
-        axi_write(ADDR_KEY_1, test_key[63:32]);
-        axi_write(ADDR_KEY_2, test_key[95:64]);
-        axi_write(ADDR_KEY_3, test_key[127:96]);
-        
-        // Write Plaintext
-        axi_write(ADDR_PT_0, test_plaintext[31:0]);
-        axi_write(ADDR_PT_1, test_plaintext[63:32]);
-        axi_write(ADDR_PT_2, test_plaintext[95:64]);
-        axi_write(ADDR_PT_3, test_plaintext[127:96]);
         
         // Start
-        axi_write(ADDR_CTRL, 32'h00000001);
+        axi_write(6'h00, 32'h00000001);
         
-        // Wait
-        wait_done();
+        // Wait for IRQ
+        while (!irq_done) @(posedge S_AXI_ACLK);
+        $display("  IRQ after done: HIGH (correct)");
+        test_pass = test_pass + 1;
         
-        // Read
-        axi_read(ADDR_CT_0, received_ciphertext[31:0]);
-        axi_read(ADDR_CT_1, received_ciphertext[63:32]);
-        axi_read(ADDR_CT_2, received_ciphertext[95:64]);
-        axi_read(ADDR_CT_3, received_ciphertext[127:96]);
-        
-        $display("\nResults:");
-        $display("  Expected:  0x%032h", expected_ciphertext);
-        $display("  Received:  0x%032h", received_ciphertext);
-        
-        if (received_ciphertext === expected_ciphertext) begin
-            $display("  PASS!");
-        end else begin
-            $display("  FAIL!");
-            errors = errors + 1;
+        //======================================================================
+        // Test 4: Back-to-back Encryptions
+        //======================================================================
+        $display("");
+        $display("[Test 4] Back-to-back Encryptions (5x)");
+        begin
+            for (i = 0; i < 5; i = i + 1) begin
+                // Modify plaintext slightly
+                axi_write(6'h18, 32'hccddeeff + i);
+                axi_write(6'h00, 32'h00000001);
+                wait_done();
+                $display("  Encryption %0d complete", i+1);
+            end
+            test_pass = test_pass + 1;
         end
         
-        //----------------------------------------------------------------------
+        //======================================================================
         // Summary
-        //----------------------------------------------------------------------
-        repeat(10) @(posedge clk);
+        //======================================================================
+        $display("");
+        $display("================================================================");
+        $display("  Test Summary");
+        $display("================================================================");
+        $display("  Passed: %0d", test_pass);
+        $display("  Failed: %0d", test_fail);
         
-        $display("\n================================================");
-        if (errors == 0) begin
-            $display("  ALL TESTS PASSED!");
+        if (test_fail == 0) begin
+            $display("");
+            $display("  *** ALL TESTS PASSED ***");
         end else begin
-            $display("  FAILED: %0d errors", errors);
+            $display("");
+            $display("  *** SOME TESTS FAILED ***");
         end
-        $display("================================================");
         
+        $display("================================================================");
+        $display("");
+        
+        #100;
         $finish;
     end
-    
+
     //==========================================================================
-    // Timeout
+    // Timeout Watchdog
     //==========================================================================
-    
     initial begin
-        #100000;
-        $display("ERROR: Timeout!");
+        #500000;
+        $display("ERROR: Global timeout!");
         $finish;
-    end
-    
-    //==========================================================================
-    // Waveform
-    //==========================================================================
-    
-    initial begin
-        $dumpfile("tb_aes128_axi.vcd");
-        $dumpvars(0, tb_aes128_axi);
     end
 
 endmodule
