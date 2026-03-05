@@ -23,7 +23,7 @@
 //   1. Write KEY_0 to KEY_3
 //   2. Write PLAINTEXT_0 to PLAINTEXT_3
 //   3. Write 0x1 to CTRL (start)
-//   4. Poll STATUS until done=1 (or wait ~12 cycles)
+//   4. Poll STATUS until done=1 (or wait ~10 cycles)
 //   5. Read CIPHERTEXT_0 to CIPHERTEXT_3
 //==============================================================================
 
@@ -142,17 +142,17 @@ module aes128_axi_top #(
     // AES-128 Core Instance
     //==========================================================================
     
-    aes128_fsm_core u_aes_core (
+    aes128_top u_aes_core (
         .clk        (S_AXI_ACLK),
         .rst_n      (S_AXI_ARESETN),
         
         .key        (key),
-        .plain_text (plaintext),
+        .plaintext (plaintext),
         .start      (start),
         
         .busy       (busy),
         .done       (done),
-        .cipher_text(ciphertext)
+        .ciphertext(ciphertext)
     );
 
 endmodule

@@ -118,6 +118,7 @@ module axi4_lite_slave #(
     
     // Configuration registers
     reg [31:0] reg_ctrl;
+    reg [31:0] reg_status;  // Sticky status: [0]:busy, [1]:done
     reg [31:0] reg_key_0, reg_key_1, reg_key_2, reg_key_3;
     reg [31:0] reg_pt_0, reg_pt_1, reg_pt_2, reg_pt_3;
     
@@ -231,20 +232,28 @@ module axi4_lite_slave #(
     
     always @(posedge S_AXI_ACLK) begin
         if (!S_AXI_ARESETN) begin
-            reg_ctrl  <= 32'h0;
-            reg_key_0 <= 32'h0;
-            reg_key_1 <= 32'h0;
-            reg_key_2 <= 32'h0;
-            reg_key_3 <= 32'h0;
-            reg_pt_0  <= 32'h0;
-            reg_pt_1  <= 32'h0;
-            reg_pt_2  <= 32'h0;
-            reg_pt_3  <= 32'h0;
+            reg_ctrl   <= 32'h0;
+            reg_status <= 32'h0;
+            reg_key_0  <= 32'h0;
+            reg_key_1  <= 32'h0;
+            reg_key_2  <= 32'h0;
+            reg_key_3  <= 32'h0;
+            reg_pt_0   <= 32'h0;
+            reg_pt_1   <= 32'h0;
+            reg_pt_2   <= 32'h0;
+            reg_pt_3   <= 32'h0;
         end else begin
-            // Auto-clear start bit
+            // Auto-clear start bit & clear sticky status on new start
             if (reg_ctrl[0]) begin
-                reg_ctrl[0] <= 1'b0;
+                reg_ctrl[0]   <= 1'b0;
+                reg_status    <= 32'h0;  // Clear status when start is issued
             end
+            
+            // Sticky latch: capture done/busy pulses from core
+            if (busy) reg_status[0] <= 1'b1;
+            if (done) reg_status[1] <= 1'b1;
+            // When core finishes (done=1), busy should clear
+            if (done) reg_status[0] <= 1'b0;
             
             // Register writes
             if (axi_wready && S_AXI_WVALID && axi_awready && S_AXI_AWVALID) begin
@@ -330,7 +339,7 @@ module axi4_lite_slave #(
             if (axi_arready && S_AXI_ARVALID && ~axi_rvalid) begin
                 case (axi_araddr)
                     ADDR_CTRL:        axi_rdata <= reg_ctrl;
-                    ADDR_STATUS:      axi_rdata <= {30'b0, done, busy};
+                    ADDR_STATUS:      axi_rdata <= reg_status;
                     ADDR_KEY_0:       axi_rdata <= reg_key_0;
                     ADDR_KEY_1:       axi_rdata <= reg_key_1;
                     ADDR_KEY_2:       axi_rdata <= reg_key_2;

@@ -29,19 +29,11 @@ jobs:
     - name: Compile RTL sources
       run: |
         echo "📦 Compiling AES-128 IP core..."
-        iverilog -g2012 -Wall -o sim.vvp \
-          hdl/sub_bytes.v \
-          hdl/shift_rows.v \
-          hdl/mix_columns.v \
-          hdl/add_round_key.v \
-          hdl/encrypt_round.v \
-          hdl/encrypt_final_round.v \
-          hdl/expand_key_core_fix.v \
-          hdl/aes128_fsm_core.v \
-          hdl/axi4_lite_slave.v \
-          hdl/aes128_axi_top.v \
-          sim/tb_aes128_axi.v \
-          sim/tb_aes128_optimized.v
+        # Use compile.f as single source of truth — auto-matches any file changes
+        grep -v '^//' compile.f | grep -v '^$' > /tmp/srcs.f
+        echo "Files to compile:"
+        cat /tmp/srcs.f
+        iverilog -g2012 -Wall -o sim.vvp -f /tmp/srcs.f
         echo "✅ Compilation successful"
     
     - name: Run testbench
