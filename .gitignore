@@ -63,6 +63,7 @@ xsim.dir/
 sim.log
 transcript
 work/
+*.wlf
 
 # === Vivado common patterns ===
 *.jou
@@ -76,3 +77,7 @@ usage_statistics_webtalk.*
 hbs.jou
 hbs.log
 vivado_pid*.str
+
+# === Keys ===
+key
+key.pub

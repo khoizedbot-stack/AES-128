@@ -53,9 +53,9 @@ module aes128_top (
     // Các round khác dùng state_out (registered)
     wire [127:0] encrypt_state = key_load ? initial_state : state_out;
     
-    // Encrypt outputs (combinational)
+    // Encrypt output (combinational) - single encrypt_round handles all rounds
     wire [127:0] round_out;
-    wire [127:0] final_out;
+    wire         final_round;
     
     //==========================================================================
     // Module Instances
@@ -92,9 +92,9 @@ module aes128_top (
         
         // Data from encrypt modules
         .round_out      (round_out),
-        .final_out      (final_out),
-        
+
         // Data outputs
+        .final_round    (final_round),
         .state_out      (state_out),
         .ciphertext     (ciphertext)
     );
@@ -118,26 +118,16 @@ module aes128_top (
     );
     
     //--------------------------------------------------------------------------
-    // Encrypt Round (Rounds 1-9)
-    // IMPORTANT: Use EXPANDED_KEY, not current_key!
+    // Encrypt Round (Rounds 1-10)
+    // final_round=1 at Round 10 → MixColumns bypassed
     // expanded_key = K[N] for Round N
-    // encrypt_state = initial_state (R1 bypass) or state_out (R2-R9)
+    // encrypt_state = initial_state (R1 bypass) or state_out (R2-R10)
     //--------------------------------------------------------------------------
     encrypt_round u_encrypt_round (
+        .final_round    (final_round),      // From datapath: 1 at round 10
         .round_key      (expanded_key),     // K[N] for round N
         .enc_state_in   (encrypt_state),    // Bypass mux
         .enc_state_round(round_out)
-    );
-    
-    //--------------------------------------------------------------------------
-    // Encrypt Final Round (Round 10 - no MixColumns)
-    // IMPORTANT: Use EXPANDED_KEY = K10
-    // encrypt_state = state_out (R9 result) khi cnt=10
-    //--------------------------------------------------------------------------
-    encrypt_final_round u_encrypt_final (
-        .round_key      (expanded_key),     // K10 for round 10
-        .state_in       (encrypt_state),    // Bypass mux
-        .state_round    (final_out)
     );
 
 endmodule

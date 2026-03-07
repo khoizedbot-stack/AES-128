@@ -11,6 +11,7 @@ module tb_encrypt_round;
     //==========================================================================
     // Signals
     //==========================================================================
+    reg             final_round;
     reg  [127:0] round_key;
     reg  [127:0] enc_state_in;
     wire [127:0] enc_state_round;
@@ -24,6 +25,7 @@ module tb_encrypt_round;
     // DUT
     //==========================================================================
     encrypt_round dut (
+        .final_round    (final_round),
         .round_key      (round_key),
         .enc_state_in   (enc_state_in),
         .enc_state_round(enc_state_round)
@@ -39,6 +41,7 @@ module tb_encrypt_round;
         input [255:0] test_name;
         begin
             test_num = test_num + 1;
+            final_round = 1'b0; // All current tests are for normal rounds
             enc_state_in = state_in;
             round_key = key;
             

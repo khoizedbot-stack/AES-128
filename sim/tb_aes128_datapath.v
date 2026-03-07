@@ -28,9 +28,9 @@ module tb_aes128_datapath;
     
     // Simulated inputs from encrypt modules
     reg  [127:0] round_out;
-    reg  [127:0] final_out;
     
     // Data outputs
+    wire        final_round;    // From DUT, indicates final round
     wire [127:0] state_out;
     wire [127:0] ciphertext;
     
@@ -51,7 +51,7 @@ module tb_aes128_datapath;
         .key_load       (key_load),
         .key_next       (key_next),
         .round_out      (round_out),
-        .final_out      (final_out),
+        .final_round    (final_round),
         .state_out      (state_out),
         .ciphertext     (ciphertext)
     );
@@ -66,8 +66,11 @@ module tb_aes128_datapath;
     // Simulate encrypt_round/final_round output (combinational)
     //==========================================================================
     always @(*) begin
-        round_out = state_out ^ 128'hAAAA_AAAA_AAAA_AAAA_AAAA_AAAA_AAAA_AAAA;
-        final_out = state_out ^ 128'hBBBB_BBBB_BBBB_BBBB_BBBB_BBBB_BBBB_BBBB;
+        // Simulate 'encrypt_round' module based on DUT's 'final_round' signal
+        if (final_round)
+            round_out = state_out ^ 128'hBBBB_BBBB_BBBB_BBBB_BBBB_BBBB_BBBB_BBBB; // Simulated final round (no MixColumns)
+        else
+            round_out = state_out ^ 128'hAAAA_AAAA_AAAA_AAAA_AAAA_AAAA_AAAA_AAAA; // Simulated normal round
     end
     
     //==========================================================================
