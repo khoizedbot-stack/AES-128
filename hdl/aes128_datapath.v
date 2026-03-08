@@ -40,12 +40,12 @@ module aes128_datapath (
     //==========================================================================
     // Data from encrypt modules (combinational)
     //==========================================================================
-    input  wire [127:0] round_out,      // From encrypt_round
-    input  wire [127:0] final_out,      // From encrypt_final_round
-    
+    input  wire [127:0] round_out,      // From encrypt_round (all rounds)
+
     //==========================================================================
     // Data Outputs
     //==========================================================================
+    output wire         final_round,    // To encrypt_round: skip MixColumns
     output reg  [127:0] state_out,      // To encrypt modules
     output reg  [127:0] ciphertext      // Final output
 );
@@ -65,8 +65,9 @@ module aes128_datapath (
     // key_load: bypass key_in → K1 và feed initial_state cho encrypt
     // key_next: advance key trong ROUNDS (trừ final round)
     //==========================================================================
-    assign key_load = ((state == S_IDLE) || (state == S_DONE)) && start;
-    assign key_next = (state == S_ROUNDS) && (round_cnt != 4'd10);
+    assign key_load    = ((state == S_IDLE) || (state == S_DONE)) && start;
+    assign key_next    = (state == S_ROUNDS) && (round_cnt != 4'd10);
+    assign final_round = (state == S_ROUNDS) && (round_cnt == 4'd10);
     
     //==========================================================================
     // FSM Logic
@@ -113,8 +114,8 @@ module aes128_datapath (
                 //--------------------------------------------------------------
                 S_ROUNDS: begin
                     if (round_cnt == 4'd10) begin
-                        // Final round - output ready
-                        ciphertext <= final_out;
+                        // Final round - output ready (MixColumns bypassed via final_round)
+                        ciphertext <= round_out;
                         busy       <= 1'b0;
                         done       <= 1'b1;
                         state      <= S_DONE;
