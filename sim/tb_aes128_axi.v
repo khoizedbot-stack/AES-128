@@ -15,6 +15,7 @@ module tb_aes128_axi_optimized;
     
     // Write Address Channel
     reg  [5:0]  S_AXI_AWADDR;
+    reg  [2:0]  S_AXI_AWPROT;
     reg         S_AXI_AWVALID;
     wire        S_AXI_AWREADY;
     
@@ -31,6 +32,7 @@ module tb_aes128_axi_optimized;
     
     // Read Address Channel
     reg  [5:0]  S_AXI_ARADDR;
+    reg  [2:0]  S_AXI_ARPROT;
     reg         S_AXI_ARVALID;
     wire        S_AXI_ARREADY;
     
@@ -59,6 +61,7 @@ module tb_aes128_axi_optimized;
         .S_AXI_ACLK    (S_AXI_ACLK),
         .S_AXI_ARESETN (S_AXI_ARESETN),
         .S_AXI_AWADDR  (S_AXI_AWADDR),
+        .S_AXI_AWPROT  (S_AXI_AWPROT),
         .S_AXI_AWVALID (S_AXI_AWVALID),
         .S_AXI_AWREADY (S_AXI_AWREADY),
         .S_AXI_WDATA   (S_AXI_WDATA),
@@ -69,6 +72,7 @@ module tb_aes128_axi_optimized;
         .S_AXI_BVALID  (S_AXI_BVALID),
         .S_AXI_BREADY  (S_AXI_BREADY),
         .S_AXI_ARADDR  (S_AXI_ARADDR),
+        .S_AXI_ARPROT  (S_AXI_ARPROT),
         .S_AXI_ARVALID (S_AXI_ARVALID),
         .S_AXI_ARREADY (S_AXI_ARREADY),
         .S_AXI_RDATA   (S_AXI_RDATA),
@@ -93,6 +97,7 @@ module tb_aes128_axi_optimized;
         begin
             @(posedge S_AXI_ACLK);
             S_AXI_AWADDR  <= addr;
+            S_AXI_AWPROT  <= 3'b000;
             S_AXI_AWVALID <= 1'b1;
             S_AXI_WDATA   <= data;
             S_AXI_WSTRB   <= 4'hF;
@@ -120,6 +125,7 @@ module tb_aes128_axi_optimized;
         begin
             @(posedge S_AXI_ACLK);
             S_AXI_ARADDR  <= addr;
+            S_AXI_ARPROT  <= 3'b000;
             S_AXI_ARVALID <= 1'b1;
             S_AXI_RREADY  <= 1'b1;
             
@@ -153,6 +159,22 @@ module tb_aes128_axi_optimized;
         end
     endtask
 
+    task wait_key_ready;
+        reg [31:0] status;
+        begin
+            cycle_count = 0;
+            status = 32'h0;
+            while ((status & 32'h4) == 0) begin  // Check key_ready bit
+                axi_read(6'h04, status);
+                cycle_count = cycle_count + 1;
+                if (cycle_count > 150) begin
+                    $display("ERROR: Timeout waiting for key_ready!");
+                    $finish;
+                end
+            end
+        end
+    endtask
+
     //==========================================================================
     // Main Test
     //==========================================================================
@@ -168,12 +190,14 @@ module tb_aes128_axi_optimized;
         test_fail = 0;
         S_AXI_ARESETN = 0;
         S_AXI_AWADDR  = 0;
+        S_AXI_AWPROT  = 0;
         S_AXI_AWVALID = 0;
         S_AXI_WDATA   = 0;
         S_AXI_WSTRB   = 0;
         S_AXI_WVALID  = 0;
         S_AXI_BREADY  = 0;
         S_AXI_ARADDR  = 0;
+        S_AXI_ARPROT  = 0;
         S_AXI_ARVALID = 0;
         S_AXI_RREADY  = 0;
         
@@ -196,6 +220,10 @@ module tb_aes128_axi_optimized;
         axi_write(6'h0C, 32'h08090a0b);  // KEY_1: bytes 4-7
         axi_write(6'h10, 32'h04050607);  // KEY_2: bytes 8-11
         axi_write(6'h14, 32'h00010203);  // KEY_3: bytes 12-15
+
+        // Trigger key expansion and wait for key_ready
+        axi_write(6'h00, 32'h00000004);
+        wait_key_ready();
         
         // Write Plaintext
         // PT = 00112233 44556677 8899aabb ccddeeff
@@ -244,6 +272,10 @@ module tb_aes128_axi_optimized;
         axi_write(6'h0C, 32'h00000000);
         axi_write(6'h10, 32'h00000000);
         axi_write(6'h14, 32'h00000000);
+
+        // Trigger key expansion and wait for key_ready
+        axi_write(6'h00, 32'h00000004);
+        wait_key_ready();
         
         // Write Plaintext = 0
         axi_write(6'h18, 32'h00000000);
@@ -287,6 +319,8 @@ module tb_aes128_axi_optimized;
         axi_write(6'h0C, 32'h08090a0b);
         axi_write(6'h10, 32'h04050607);
         axi_write(6'h14, 32'h00010203);
+        axi_write(6'h00, 32'h00000004);
+        wait_key_ready();
         axi_write(6'h18, 32'hccddeeff);
         axi_write(6'h1C, 32'h8899aabb);
         axi_write(6'h20, 32'h44556677);
@@ -299,8 +333,8 @@ module tb_aes128_axi_optimized;
             $display("  IRQ before start: HIGH (unexpected)");
         end
         
-        // Start
-        axi_write(6'h00, 32'h00000001);
+        // Start with IRQ enabled (bit 3 = 1, bit 0 = 1 -> 0x09)
+        axi_write(6'h00, 32'h00000009);
         
         // Wait for IRQ
         while (!irq_done) @(posedge S_AXI_ACLK);

@@ -1,0 +1,17 @@
+{
+  "signal": [
+    {"name": "S_AXI_ACLK", "wave": "P......"},
+    {"name": "rd_state", "wave": "3.4.3..", "data": ["RD_IDLE", "RD_DATA", "RD_IDLE"]},
+    {"name": "S_AXI_ARVALID", "wave": "01.0..."},
+    {"name": "S_AXI_ARADDR", "wave": "x2.x...", "data": ["ADDR"]},
+    {"name": "S_AXI_ARREADY", "wave": "0.10..."},
+    {"name": "S_AXI_RVALID", "wave": "0..10.."},
+    {"name": "S_AXI_RDATA", "wave": "x..2x..", "data": ["DATA"]},
+    {"name": "S_AXI_RRESP", "wave": "x..2x..", "data": ["OKAY"]},
+    {"name": "S_AXI_RREADY", "wave": "1......"}
+  ],
+  "head": {
+    "text": "AXI4-Lite Read Cycle FSM",
+    "tick": 0
+  }
+}

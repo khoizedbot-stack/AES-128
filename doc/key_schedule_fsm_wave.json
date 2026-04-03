@@ -1,0 +1,172 @@
+{
+  "signal": [
+    {
+      "name": "clk",
+      "wave": "p..............."
+    },
+    {
+      "name": "rst_n",
+      "wave": "01.............."
+    },
+    {},
+    [
+      "Control",
+      {
+        "name": "start_expand",
+        "wave": "0..10..........."
+      },
+      {
+        "name": "key_in[127:0]",
+        "wave": "x..=x...........",
+        "data": [
+          "K0 (master key)"
+        ]
+      }
+    ],
+    {},
+    [
+      "FSM internal counters",
+      {
+        "name": "busy",
+        "wave": "0...1........0.."
+      },
+      {
+        "name": "cnt[3:0]",
+        "wave": "x...==========..",
+        "data": [
+          "1",
+          "2",
+          "3",
+          "4",
+          "5",
+          "6",
+          "7",
+          "8",
+          "9",
+          "10"
+        ]
+      },
+      {
+        "name": "rcon_idx[3:0]",
+        "wave": "x...==========..",
+        "data": [
+          "1",
+          "2",
+          "3",
+          "4",
+          "5",
+          "6",
+          "7",
+          "8",
+          "9",
+          "10"
+        ]
+      }
+    ],
+    {},
+    [
+      "Combinational expand_key_core",
+      {
+        "name": "current_key",
+        "wave": "x...==========..",
+        "data": [
+          "K0",
+          "K1",
+          "K2",
+          "K3",
+          "K4",
+          "K5",
+          "K6",
+          "K7",
+          "K8",
+          "K9"
+        ]
+      },
+      {
+        "name": "next_key",
+        "wave": "x...==========..",
+        "data": [
+          "K1",
+          "K2",
+          "K3",
+          "K4",
+          "K5",
+          "K6",
+          "K7",
+          "K8",
+          "K9",
+          "K10"
+        ]
+      }
+    ],
+    {},
+    [
+      "Memory writes (keys[i] <= next_key when cnt=i)",
+      {
+        "name": "keys[0]",
+        "wave": "x...=...........",
+        "data": [
+          "K0"
+        ]
+      },
+      {
+        "name": "keys[1]",
+        "wave": "x....=..........",
+        "data": [
+          "K1"
+        ]
+      },
+      {
+        "name": "keys[2]",
+        "wave": "x.....=.........",
+        "data": [
+          "K2"
+        ]
+      },
+      {
+        "name": "keys[3-8]",
+        "wave": "x......======...",
+        "data": [
+          "K3",
+          "K4",
+          "K5",
+          "K6",
+          "K7",
+          "K8"
+        ]
+      },
+      {
+        "name": "keys[9]",
+        "wave": "x............=..",
+        "data": [
+          "K9"
+        ]
+      },
+      {
+        "name": "keys[10]",
+        "wave": "x.............=.",
+        "data": [
+          "K10"
+        ]
+      }
+    ],
+    {},
+    [
+      "Output",
+      {
+        "name": "key_ready",
+        "wave": "0.............1."
+      }
+    ]
+  ],
+  "head": {
+    "text": "key_schedule — 10-cycle iterative expansion (start_expand → key_ready)",
+    "tick": 0
+  },
+  "foot": {
+    "text": "Spec: ① start_expand pulse: keys[0]<=key_in, current_key<=key_in, busy=1, cnt=1, rcon=1. ② Each busy cycle (cnt!=10): keys[cnt]<=next_key (combinational), cnt++, rcon++. ③ When cnt==10: busy=0, key_ready=1, keys[10]<=next_key. Total 10 clocks."
+  },
+  "config": {
+    "hscale": 1.5
+  }
+}

@@ -1,0 +1,88 @@
+{
+  "signal": [
+    {
+      "name": "clk",
+      "wave": "p..............."
+    },
+    {
+      "name": "rst_n",
+      "wave": "01.............."
+    },
+    {},
+    [
+      "AXI control inputs",
+      {
+        "name": "new_key",
+        "wave": "0..10..........."
+      },
+      {
+        "name": "data_bus",
+        "wave": "z..3z...........",
+        "data": [
+          "KEY (128b)"
+        ]
+      }
+    ],
+    {},
+    [
+      "Datapath FSM",
+      {
+        "name": "state",
+        "wave": "x.3.4.........3.",
+        "data": [
+          "IDLE",
+          "KEY_EXP",
+          "IDLE"
+        ]
+      },
+      {
+        "name": "busy",
+        "wave": "0..1.........0.."
+      },
+      {
+        "name": "reg_key_in",
+        "wave": "x..3............",
+        "data": [
+          "KEY"
+        ]
+      }
+    ],
+    {},
+    [
+      "To key_schedule",
+      {
+        "name": "start_expand",
+        "wave": "0..10..........."
+      },
+      {
+        "name": "key_out_fsm",
+        "wave": "x..3............",
+        "data": [
+          "KEY"
+        ]
+      }
+    ],
+    {},
+    [
+      "From key_schedule",
+      {
+        "name": "ks_busy",
+        "wave": "0...1........0.."
+      },
+      {
+        "name": "key_ready",
+        "wave": "0............1.."
+      }
+    ]
+  ],
+  "head": {
+    "text": "aes128_datapath — KEY_EXP phase (new_key → wait key_ready → IDLE)",
+    "tick": 0
+  },
+  "foot": {
+    "text": "Spec: ① new_key pulse latches data_bus to reg_key_in. ② start_expand fires same cycle, FSM → KEY_EXP, busy=1. ③ Wait until !ks_busy && key_ready (10 cycles in key_schedule). ④ FSM → IDLE, busy=0. Now ready to accept start."
+  },
+  "config": {
+    "hscale": 1.5
+  }
+}

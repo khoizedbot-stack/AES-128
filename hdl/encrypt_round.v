@@ -2,7 +2,7 @@
 
 
 module encrypt_round(
-    input wire         final_round,    // 1 = skip MixColumns (final round)
+    input wire         final_round,    
     input wire [127:0] round_key,
     input wire [127:0] enc_state_in,
     output wire [127:0] enc_state_round

@@ -1,63 +1,113 @@
 ################################################################################
-# FLEXIBLE MAKEFILE FOR AES-128
+# AES-128 Simulation Makefile — ModelSim (vlog / vsim)
+#
 # Usage:
-#   1. make all                  -> Chạy tất cả các testbench trong danh sách
-#   2. make tb_aes128_optimized  -> Chỉ chạy testbench này
-#   3. make tb_aes128_axi        -> Chỉ chạy testbench kia
+#   make all                  — compile + run all testbenches
+#   make compile              — compile only (skips if sources unchanged)
+#   make tb_key_schedule      — compile if needed, then run one testbench
+#   make wave TEST=tb_xxx     — open waveform viewer for a saved .wlf
+#   make report               — print PASS/FAIL summary from all logs
+#   make clean                — remove build artefacts
 ################################################################################
 
-# --- CẤU HÌNH DANH SÁCH TESTBENCH (Thêm tên module testbench vào đây) ---
-# Lưu ý: Đây là tên MODULE trong file Verilog, không phải tên file .v
-TEST_LIST = tb_aes128_axi_optimized tb_aes128_optimized
+LIB_NAME  = work
+LOG_DIR   = log
+COMPILE_F = compile.f
 
-# --- CÁC BIẾN MẶC ĐỊNH ---
-COMPILE_LIST = compile.f
-LOG_DIR      = log
-LIB_NAME     = work
+# Sentinel file: rebuilt only when HDL or TB sources change
+COMPILED  = $(LIB_NAME)/.compiled
 
-# --- MỤC TIÊU CHÍNH (ALL) ---
-# Khi gõ 'make all', nó sẽ gọi target 'compile' trước, sau đó gọi list các test
-all: compile $(TEST_LIST)
+# --------------------------------------------------------------------------
+# Tool Configuration
+# --------------------------------------------------------------------------
+# If the tools are not in your PATH, specify the directory here:
+BIN_DIR   = D:/Questasim/win64
 
-# --- BƯỚC 1: BIÊN DỊCH (COMPILE) ---
-compile:
+VLIB = $(BIN_DIR)/vlib.exe
+VMAP = $(BIN_DIR)/vmap.exe
+VLOG = $(BIN_DIR)/vlog.exe
+VSIM = $(BIN_DIR)/vsim.exe
+
+# --------------------------------------------------------------------------
+# Testbench list (Verilog module names, one per line)
+# --------------------------------------------------------------------------
+TEST_LIST = \
+	tb_inv_shift_rows  \
+	tb_decrypt_round   \
+	tb_encrypt_round   \
+	tb_key_schedule    \
+	tb_aes128_datapath \
+	tb_aes128_top      \
+	tb_axi4_lite_slave     \
+	tb_aes128_axi_optimized
+
+# Note: The following testbenches are missing from sim/ directory:
+# tb_inv_sub_bytes, tb_inv_mix_columns, tb_sub_bytes, tb_shift_rows, tb_mix_columns
+
+# --------------------------------------------------------------------------
+.PHONY: all compile clean report wave $(TEST_LIST)
+# --------------------------------------------------------------------------
+
+# --- all: compile once, then run every testbench --------------------------
+all: $(COMPILED) $(TEST_LIST)
+
+# --- compile target (alias for the sentinel) ------------------------------
+compile: $(COMPILED)
+
+# --- Sentinel: rebuild only when sources or compile.f change --------------
+$(COMPILED): $(COMPILE_F) $(wildcard hdl/*.v) $(wildcard sim/*.v)
 	@echo "========================================"
-	@echo "      COMPILING DESIGN & TESTBENCH      "
+	@echo "   COMPILING DESIGN + TESTBENCHES"
 	@echo "========================================"
-	mkdir -p $(LOG_DIR)
-	if [ ! -d "$(LIB_NAME)" ]; then vlib.exe $(LIB_NAME); fi
-	vmap.exe $(LIB_NAME) $(LIB_NAME)
-	vlog.exe -coveropt 3 +cover +acc -f $(COMPILE_LIST)
+	@if [ ! -d "$(LOG_DIR)" ]; then mkdir $(LOG_DIR); fi
+	@if [ ! -d "$(LIB_NAME)" ]; then $(VLIB) $(LIB_NAME); fi
+	@$(VMAP) $(LIB_NAME) $(LIB_NAME)
+	$(VLOG) -coveropt 3 +cover +acc -f $(COMPILE_F)
+	@touch $(COMPILED)
+	@echo "========================================"
+	@echo "   COMPILE DONE"
+	@echo "========================================"
 
-# --- BƯỚC 2: CHẠY TESTBENCH (DYNAMIC RULE) ---
-# Đây là phần quan trọng nhất.
-# Nó định nghĩa quy tắc cho tất cả các tên nằm trong biến $(TEST_LIST)
-$(TEST_LIST): compile
-	@echo "----------------------------------------"
-	@echo " RUNNING TEST: $@"
-	@echo "----------------------------------------"
-	# $@ chính là tên target bạn gõ (ví dụ: tb_aes128_optimized)
-	vsim.exe -l $(LOG_DIR)/$@.log \
-             -voptargs=+acc -assertdebug \
-             -c $@ \
-             -do "log -r /*; run -all; quit"
-	
-	@# Lưu waveform
-	cp -rf vsim.wlf $(LOG_DIR)/$@.wlf
-	@echo "Log saved to: $(LOG_DIR)/$@.log"
+# --- Per-testbench rule (shared by all names in TEST_LIST) ----------------
+$(TEST_LIST): $(COMPILED)
+	@echo ""
+	@echo "========================================"
+	@echo "  RUNNING: $@"
+	@echo "========================================"
+	$(VSIM) -l $(LOG_DIR)/$@.log \
+	         -voptargs="+acc" \
+	         -c $@ \
+	         -do "add wave -recursive /$@/dut/*; log -r /*; run -all; quit"
+	@-cp vsim.wlf $(LOG_DIR)/$@.wlf 2>/dev/null || true
+	@echo ""
+	@grep -E "(PASS|FAIL|Summary)" $(LOG_DIR)/$@.log 2>/dev/null | tail -5 || true
+	@echo "  Log saved: $(LOG_DIR)/$@.log"
 
-# --- TIỆN ÍCH KHÁC ---
-
-# Mở sóng (Waveform) cho file cụ thể. VD: make wave TEST=tb_aes128_optimized
+# --- wave: open waveform for a specific test ------------------------------
 wave:
-	vsim.exe -i -view $(LOG_DIR)/$(TEST).wlf -do "add wave vsim:/$(TEST)/*; radix -hex"
+	@[ -n "$(TEST)" ] || (echo "Usage: make wave TEST=<tb_name>" && exit 1)
+	$(VSIM) -i -view $(LOG_DIR)/$(TEST).wlf \
+	         -do "add wave -r /*; radix -hex"
 
-clean:
-	rm -rf $(LIB_NAME)
-	rm -rf $(LOG_DIR)
-	rm -rf *.ini *.log *.wlf transcript coverage *.ucdb
-
-# Báo cáo nhanh kết quả Pass/Fail
+# --- report: PASS/FAIL summary across all logs ----------------------------
 report:
-	@echo "--- SUMMARY REPORT ---"
-	@grep -E "PASS|FAIL|Error" $(LOG_DIR)/*.log || echo "No logs found."
+	@echo ""
+	@echo "========================================"
+	@echo "         SIMULATION REPORT"
+	@echo "========================================"
+	@for tb in $(TEST_LIST); do \
+		log="$(LOG_DIR)/$$tb.log"; \
+		if [ -f "$$log" ]; then \
+			pass=$$(grep -c " PASS" "$$log" 2>/dev/null || echo 0); \
+			fail=$$(grep -c " FAIL" "$$log" 2>/dev/null || echo 0); \
+			printf "  %-28s  PASS=%-3s  FAIL=%-3s\n" "$$tb" "$$pass" "$$fail"; \
+		else \
+			printf "  %-28s  (not run)\n" "$$tb"; \
+		fi; \
+	done
+	@echo "========================================"
+
+# --- clean ----------------------------------------------------------------
+clean:
+	rm -rf $(LIB_NAME) $(LOG_DIR)
+	rm -f *.ini *.log *.wlf transcript *.ucdb

@@ -1,0 +1,163 @@
+{
+  "signal": [
+    {
+      "name": "clk",
+      "wave": "p................."
+    },
+    {
+      "name": "rst_n",
+      "wave": "01................"
+    },
+    {},
+    [
+      "AXI control",
+      {
+        "name": "start",
+        "wave": "0..10............."
+      },
+      {
+        "name": "enc_dec",
+        "wave": "0................."
+      },
+      {
+        "name": "key_ready",
+        "wave": "1................."
+      },
+      {
+        "name": "data_bus",
+        "wave": "z..=z..........=z.",
+        "data": [
+          "PT (128b)",
+          "CT (128b)"
+        ]
+      }
+    ],
+    {},
+    [
+      "FSM",
+      {
+        "name": "state",
+        "wave": "x=..=..........==.",
+        "data": [
+          "IDLE",
+          "ROUNDS",
+          "DONE",
+          "IDLE"
+        ]
+      },
+      {
+        "name": "busy",
+        "wave": "0...1..........0.."
+      },
+      {
+        "name": "done",
+        "wave": "0..............10."
+      },
+      {
+        "name": "enc_dec_r",
+        "wave": "0................."
+      }
+    ],
+    {},
+    [
+      "Round counter / key index (each cycle in ROUNDS)",
+      {
+        "name": "round_cnt[3:0]",
+        "wave": "x=...==========...",
+        "data": [
+          "0",
+          "1",
+          "2",
+          "3",
+          "4",
+          "5",
+          "6",
+          "7",
+          "8",
+          "9",
+          "10"
+        ]
+      },
+      {
+        "name": "round_idx[3:0]",
+        "wave": "x=...==========...",
+        "data": [
+          "0",
+          "1",
+          "2",
+          "3",
+          "4",
+          "5",
+          "6",
+          "7",
+          "8",
+          "9",
+          "10"
+        ]
+      },
+      {
+        "name": "use_initial",
+        "wave": "0...10............"
+      },
+      {
+        "name": "final_round",
+        "wave": "0.............1..."
+      }
+    ],
+    {},
+    [
+      "Datapath",
+      {
+        "name": "round_key",
+        "wave": "x=...==========...",
+        "data": [
+          "K0",
+          "K1",
+          "K2",
+          "K3",
+          "K4",
+          "K5",
+          "K6",
+          "K7",
+          "K8",
+          "K9",
+          "K10"
+        ]
+      },
+      {
+        "name": "state_out",
+        "wave": "x....===========..",
+        "data": [
+          "pt⊕K0",
+          "R1",
+          "R2",
+          "R3",
+          "R4",
+          "R5",
+          "R6",
+          "R7",
+          "R8",
+          "R9",
+          "CT"
+        ]
+      },
+      {
+        "name": "data_out",
+        "wave": "x..............=..",
+        "data": [
+          "CIPHERTEXT"
+        ]
+      }
+    ]
+  ],
+  "head": {
+    "text": "aes128_datapath — ENCRYPT (start at cycle 3 → 11-cycle ROUNDS → DONE at cycle 15)",
+    "tick": 0
+  },
+  "foot": {
+    "text": "Spec: enc_dec=0 → enc_dec_r=0, round_idx counts UP (K0→K10). Cycle 4: enter ROUNDS, R.cnt=0, use_initial=1. Cycle 5 (cnt=0 branch): state_out=pt⊕K0 (initial ARK), use_initial=0, cnt→1. Cycles 6-14 (else branch): rounds 1-9 with MixColumns. Cycle 14: final_round=1 (since cnt+1==10). Cycle 15 (cnt==10): state_out=CT (no MixColumns), data_out latched, done=1, state=DONE."
+  },
+  "config": {
+    "hscale": 1.3
+  }
+}

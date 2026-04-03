@@ -1,133 +1,113 @@
-//==============================================================================
-// Module: aes128_top
-// Description: AES-128 Top Module
-//              Kết nối các module
-//
-// Key insight:
-//   - encrypt modules dùng EXPANDED_KEY (không phải current_key)
-//   - expanded_key = expand(key_source, rcon) là combinational
-//   - key_load=1: bypass key_in → expanded_key = K1 cho Round 1
-//   - encrypt_state bypass initial_state khi key_load=1 (Round 1)
-//
-// Latency: 10 clock cycles
-//==============================================================================
-
 `timescale 1ns / 1ps
 
 module aes128_top (
     input  wire         clk,
     input  wire         rst_n,
-    
-    // Control
+
     input  wire         start,
-    input  wire [127:0] key,
-    input  wire [127:0] plaintext,
-    
-    // Status
+    input  wire         new_key,
+    input  wire         enc_dec,     // 0=encrypt, 1=decrypt (latch khi start)
+
+    inout  wire [127:0] data_bus,
+
     output wire         busy,
     output wire         done,
-    
-    // Output
-    output wire [127:0] ciphertext
+    output wire         key_ready
 );
 
-    //==========================================================================
-    // Internal Wires
-    //==========================================================================
-    
-    // Key Gen control (from datapath)
-    wire        key_load;
-    wire        key_next;
-    
-    // Key Gen outputs
-    wire [127:0] current_key;       // Stored key K[n-1]
-    wire [127:0] expanded_key;      // Next key K[n] (for encryption!)
-    
-    // Initial AddRoundKey (PT XOR K0)
-    wire [127:0] initial_state;     // Plaintext XOR Key
-    
-    // Datapath output
-    wire [127:0] state_out;         // State from datapath register
-    
-    // Bypass mux: Round 1 dùng initial_state (khi key_load=1)
-    // Các round khác dùng state_out (registered)
-    wire [127:0] encrypt_state = key_load ? initial_state : state_out;
-    
-    // Encrypt output (combinational) - single encrypt_round handles all rounds
-    wire [127:0] round_out;
-    wire         final_round;
-    
-    //==========================================================================
-    // Module Instances
-    //==========================================================================
-    
-    //--------------------------------------------------------------------------
-    // Initial AddRoundKey: PT XOR K0
-    //--------------------------------------------------------------------------
-    add_round_key u_initial_xor (
-        .round_key      (key),
-        .state_ark_in   (plaintext),
-        .state_ark_out  (initial_state)
-    );
-    
-    //--------------------------------------------------------------------------
-    // Datapath (FSM + state_out register)
-    // Now only handles control flow, no computation
-    //--------------------------------------------------------------------------
-    aes128_datapath u_datapath (
-        .clk            (clk),
-        .rst_n          (rst_n),
-        
-        // External control
-        .start          (start),
-        
-        
-        // Status
-        .busy           (busy),
-        .done           (done),
-        
-        // Key Gen control
-        .key_load       (key_load),
-        .key_next       (key_next),
-        
-        // Data from encrypt modules
-        .round_out      (round_out),
+    // -------------------------------------------------------------------------
+    // Internal signals
+    // -------------------------------------------------------------------------
+    wire        start_expand;
+    wire [3:0]  round_idx;
+    wire        ks_busy;
+    wire        ks_key_ready;
+    wire [127:0] round_key;
 
-        // Data outputs
-        .final_round    (final_round),
-        .state_out      (state_out),
-        .ciphertext     (ciphertext)
-    );
-    
-    //--------------------------------------------------------------------------
-    // Key Generation (with internal register & rcon)
-    // expanded_key = expand(current_key, rcon) [combinational]
-    //--------------------------------------------------------------------------
-    key_gen u_key_gen (
+    wire        enc_dec_r;          // latched enc_dec từ datapath
+    wire        use_initial, final_round;
+    wire [127:0] state_out;
+    wire [127:0] enc_round_out, dec_round_out;
+    wire [127:0] data_out_dp;
+
+    wire [127:0] key_from_fsm;
+    wire [127:0] pt_from_fsm;
+
+    // -------------------------------------------------------------------------
+    // Key schedule
+    // -------------------------------------------------------------------------
+    key_schedule u_key_schedule (
         .clk            (clk),
         .rst_n          (rst_n),
-        
-        // Control
-        .load           (key_load),
-        .next           (key_next),
-        
+        .start_expand   (start_expand),
+        .key_in         (key_from_fsm),
+        .key_ready      (ks_key_ready),
+        .busy           (ks_busy),
+        .round_idx      (round_idx),
+        .round_key      (round_key)
+    );
+
+    // -------------------------------------------------------------------------
+    // Initial AddRoundKey
+    // -------------------------------------------------------------------------
+    wire [127:0] initial_state = pt_from_fsm ^ round_key;
+
+    wire [127:0] round_out = enc_dec_r ? dec_round_out : enc_round_out;
+    wire [127:0] next_state_in = use_initial ? initial_state : round_out;
+
+    // -------------------------------------------------------------------------
+    // Encrypt round
+    // -------------------------------------------------------------------------
+    encrypt_round u_enc_round (
+        .final_round    (final_round),
+        .round_key      (round_key),
+        .enc_state_in   (state_out),
+        .enc_state_round(enc_round_out)
+    );
+
+    // -------------------------------------------------------------------------
+    // Decrypt round
+    // -------------------------------------------------------------------------
+    decrypt_round u_dec_round (
+        .final_round    (final_round),
+        .round_key      (round_key),
+        .dec_state_in   (state_out),
+        .dec_state_round(dec_round_out)
+    );
+
+    // -------------------------------------------------------------------------
+    // Datapath FSM
+    // -------------------------------------------------------------------------
+    aes128_datapath u_datapath (
+        .clk           (clk),
+        .rst_n         (rst_n),
+        .start         (start),
+        .new_key       (new_key),
+        .enc_dec       (enc_dec),
+        // Bus chung
+        .data_bus      (data_bus),
+        .key_out_fsm   (key_from_fsm),
+        .pt_out_fsm    (pt_from_fsm),
+        // Status
+        .busy          (busy),
+        .done          (done),
+        .key_ready     (key_ready),
+        // Key schedule control
+        .start_expand  (start_expand),
+        .ks_busy       (ks_busy),
+        .ks_key_ready  (ks_key_ready),
+        .round_idx     (round_idx),
+        // Latched mode
+        .enc_dec_r     (enc_dec_r),
+        // Round control
+        .use_initial   (use_initial),
+        .final_round   (final_round),
         // Data
-        .key_in         (key),
-        
-        .expanded_key   (expanded_key)
+        .next_state_in (next_state_in),
+        .state_out     (state_out),
+        .data_out      (data_out_dp)
     );
-    
-    //--------------------------------------------------------------------------
-    // Encrypt Round (Rounds 1-10)
-    // final_round=1 at Round 10 → MixColumns bypassed
-    // expanded_key = K[N] for Round N
-    // encrypt_state = initial_state (R1 bypass) or state_out (R2-R10)
-    //--------------------------------------------------------------------------
-    encrypt_round u_encrypt_round (
-        .final_round    (final_round),      // From datapath: 1 at round 10
-        .round_key      (expanded_key),     // K[N] for round N
-        .enc_state_in   (encrypt_state),    // Bypass mux
-        .enc_state_round(round_out)
-    );
+
+    // (data_bus is driven directly by u_datapath)
 
 endmodule

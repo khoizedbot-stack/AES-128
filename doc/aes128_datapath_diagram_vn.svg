@@ -1,0 +1,148 @@
+<svg viewBox="0 0 1000 550" width="100%" height="100%" xmlns="http://www.w3.org/2000/svg">
+    <style>
+        text {
+            font-family: Arial, sans-serif;
+            font-size: 14px;
+        }
+        .bold {
+            font-weight: bold;
+        }
+        .small {
+            font-size: 12px;
+        }
+    </style>
+    <defs>
+        <marker id="arrow" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+            <path d="M 0 0 L 10 5 L 0 10 z" fill="black" />
+        </marker>
+        <marker id="arrow_rev" viewBox="0 0 10 10" refX="0" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+            <path d="M 10 0 L 0 5 L 10 10 z" fill="black" />
+        </marker>
+    </defs>
+
+    <!-- Blocks -->
+    <!-- DATAPATH -->
+    <rect x="120" y="60" width="180" height="440" fill="none" stroke="black" stroke-width="2"/>
+    <text x="210" y="85" text-anchor="middle" class="bold">ĐƯỜNG DẪN DỮ LIỆU</text>
+    <text x="210" y="105" text-anchor="middle" class="bold">AES-128</text>
+
+    <!-- KEY SCHEDULE -->
+    <rect x="480" y="80" width="160" height="160" fill="none" stroke="black" stroke-width="2"/>
+    <text x="560" y="105" text-anchor="middle" class="bold">BỘ SINH KHÓA</text>
+
+    <!-- ROUND LOGIC -->
+    <rect x="700" y="100" width="160" height="240" fill="none" stroke="black" stroke-width="2"/>
+    <text x="780" y="120" text-anchor="middle" class="bold">KHỐI XỬ LÝ VÒNG</text>
+    
+    <!-- ENCRYPT ROUND -->
+    <rect x="715" y="140" width="90" height="60" fill="none" stroke="black" stroke-width="2"/>
+    <text x="760" y="175" text-anchor="middle">VÒNG MÃ HÓA</text>
+
+    <!-- DECRYPT ROUND -->
+    <rect x="715" y="240" width="90" height="60" fill="none" stroke="black" stroke-width="2"/>
+    <text x="760" y="275" text-anchor="middle">VÒNG GIẢI MÃ</text>
+
+    <!-- INTERNAL MUX -->
+    <polygon points="815,140 835,160 835,280 815,300" fill="none" stroke="black" stroke-width="2"/>
+    <text x="822" y="175" class="small">0</text>
+    <text x="822" y="275" class="small">1</text>
+
+    <!-- EXTERNAL MUX -->
+    <polygon points="600,360 630,380 630,420 600,440" fill="none" stroke="black" stroke-width="2"/>
+    <text x="605" y="385" class="small">1</text>
+    <text x="605" y="425" class="small">0</text>
+
+    <!-- XOR GATE -->
+    <circle cx="470" cy="380" r="15" fill="none" stroke="black" stroke-width="2"/>
+    <line x1="470" y1="365" x2="470" y2="395" stroke="black" stroke-width="2"/>
+    <line x1="455" y1="380" x2="485" y2="380" stroke="black" stroke-width="2"/>
+
+    <!-- Signals & Paths -->
+    <!-- External Inputs -->
+    <path d="M 20 100 L 115 100" fill="none" stroke="black" stroke-width="1.5" marker-end="url(#arrow)"/>
+    <text x="20" y="95">start</text>
+
+    <path d="M 20 130 L 115 130" fill="none" stroke="black" stroke-width="1.5" marker-end="url(#arrow)"/>
+    <text x="20" y="125">new_key</text>
+
+    <path d="M 20 160 L 115 160" fill="none" stroke="black" stroke-width="1.5" marker-end="url(#arrow)"/>
+    <text x="20" y="155">enc_dec</text>
+
+    <path d="M 25 190 L 115 190" fill="none" stroke="black" stroke-width="1.5" marker-start="url(#arrow_rev)" marker-end="url(#arrow)"/>
+    <text x="20" y="180">data_bus[127:0]</text>
+
+    <path d="M 20 230 L 115 230" fill="none" stroke="black" stroke-width="1.5" marker-end="url(#arrow)"/>
+    <text x="20" y="225">clk, rst_n</text>
+
+    <!-- DATAPATH to BỘ SINH KHÓA -->
+    <path d="M 300 120 L 475 120" fill="none" stroke="black" stroke-width="1.5" marker-end="url(#arrow)"/>
+    <text x="310" y="115">key_out_fsm[127:0]</text>
+
+    <path d="M 300 145 L 475 145" fill="none" stroke="black" stroke-width="1.5" marker-end="url(#arrow)"/>
+    <text x="310" y="140">start_expand, round_idx[3:0]</text>
+
+    <!-- BỘ SINH KHÓA to DATAPATH -->
+    <path d="M 480 170 L 305 170" fill="none" stroke="black" stroke-width="1.5" marker-end="url(#arrow)"/>
+    <text x="320" y="165">ks_busy, key_ready</text>
+
+    <!-- BỘ SINH KHÓA to top outputs -->
+    <path d="M 640 170 L 950 170" fill="none" stroke="black" stroke-width="1.5" marker-end="url(#arrow)"/>
+    <text x="960" y="175">key_ready</text>
+
+    <!-- round_key -->
+    <path d="M 560 240 L 560 280 L 695 280" fill="none" stroke="black" stroke-width="1.5" marker-end="url(#arrow)"/>
+    <path d="M 560 280 L 470 280 L 470 360" fill="none" stroke="black" stroke-width="1.5" marker-end="url(#arrow)"/>
+    <circle cx="560" cy="280" r="3" fill="black"/>
+    <text x="570" y="275">round_key[127:0]</text>
+
+    <!-- DATAPATH to KHỐI XỬ LÝ VÒNG -->
+    <path d="M 300 250 L 695 250" fill="none" stroke="black" stroke-width="1.5" marker-end="url(#arrow)"/>
+    <text x="310" y="245">state_out[127:0]</text>
+
+    <path d="M 300 265 L 695 265" fill="none" stroke="black" stroke-width="1.5" marker-end="url(#arrow)"/>
+    <text x="310" y="260">enc_dec_r, final_round</text>
+
+    <!-- DATAPATH to Top Outputs -->
+    <path d="M 300 320 L 950 320" fill="none" stroke="black" stroke-width="1.5" marker-end="url(#arrow)"/>
+    <text x="960" y="325">busy</text>
+
+    <path d="M 300 350 L 950 350" fill="none" stroke="black" stroke-width="1.5" marker-end="url(#arrow)"/>
+    <text x="960" y="355">done</text>
+
+    <!-- DATAPATH to XOR -->
+    <path d="M 300 380 L 450 380" fill="none" stroke="black" stroke-width="1.5" marker-end="url(#arrow)"/>
+    <text x="310" y="375">pt_out_fsm[127:0]</text>
+
+    <!-- XOR to External MUX -->
+    <path d="M 485 380 L 595 380" fill="none" stroke="black" stroke-width="1.5" marker-end="url(#arrow)"/>
+    <text x="495" y="375">initial_state</text>
+
+    <!-- KHỐI XỬ LÝ VÒNG internal signals -->
+    <path d="M 700 250 L 710 250 L 710 170 L 715 170" fill="none" stroke="black" stroke-width="1.5"/>
+    <path d="M 710 250 L 710 270 L 715 270" fill="none" stroke="black" stroke-width="1.5"/>
+    <circle cx="710" cy="250" r="3" fill="black"/>
+
+    <path d="M 700 280 L 705 280 L 705 190 L 715 190" fill="none" stroke="black" stroke-width="1.5"/>
+    <path d="M 705 280 L 715 280" fill="none" stroke="black" stroke-width="1.5"/>
+    <circle cx="705" cy="280" r="3" fill="black"/>
+
+    <!-- VÒNG MÃ HÓA to internal MUX -->
+    <path d="M 805 170 L 815 170" fill="none" stroke="black" stroke-width="1.5"/>
+    <!-- VÒNG GIẢI MÃ to internal MUX -->
+    <path d="M 805 270 L 815 270" fill="none" stroke="black" stroke-width="1.5"/>
+
+    <!-- enc_dec_r to internal MUX select -->
+    <path d="M 700 265 L 825 265 L 825 287" fill="none" stroke="black" stroke-width="1.5" marker-end="url(#arrow)"/>
+    
+    <!-- KHỐI XỬ LÝ VÒNG out to External MUX -->
+    <path d="M 835 220 L 890 220 L 890 420 L 595 420" fill="none" stroke="black" stroke-width="1.5" marker-end="url(#arrow)"/>
+    <text x="700" y="415">round_out[127:0]</text>
+
+    <!-- DATAPATH to External MUX select -->
+    <path d="M 300 460 L 615 460 L 615 442" fill="none" stroke="black" stroke-width="1.5" marker-end="url(#arrow)"/>
+    <text x="450" y="455">use_initial</text>
+
+    <!-- External MUX to DATAPATH -->
+    <path d="M 630 400 L 660 400 L 660 480 L 305 480" fill="none" stroke="black" stroke-width="1.5" marker-end="url(#arrow)"/>
+    <text x="450" y="475">next_state_in[127:0]</text>
+</svg>

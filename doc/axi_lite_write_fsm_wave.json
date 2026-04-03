@@ -1,0 +1,20 @@
+{
+  "signal": [
+    {"name": "S_AXI_ACLK", "wave": "P......"},
+    {"name": "wr_state", "wave": "3.4.3..", "data": ["WR_IDLE", "WR_RESP", "WR_IDLE"]},
+    {"name": "S_AXI_AWVALID", "wave": "01.0..."},
+    {"name": "S_AXI_AWADDR", "wave": "x2.x...", "data": ["ADDR"]},
+    {"name": "S_AXI_AWREADY", "wave": "0.10..."},
+    {"name": "S_AXI_WVALID", "wave": "01.0..."},
+    {"name": "S_AXI_WDATA", "wave": "x2.x...", "data": ["DATA"]},
+    {"name": "S_AXI_WSTRB", "wave": "x2.x...", "data": ["STRB"]},
+    {"name": "S_AXI_WREADY", "wave": "0.10..."},
+    {"name": "S_AXI_BVALID", "wave": "0..10.."},
+    {"name": "S_AXI_BREADY", "wave": "1......"},
+    {"name": "S_AXI_BRESP", "wave": "x..2x..", "data": ["OKAY"]}
+  ],
+  "head": {
+    "text": "AXI4-Lite Write Cycle FSM",
+    "tick": 0
+  }
+}
