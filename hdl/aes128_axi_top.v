@@ -1,10 +1,11 @@
 //==============================================================================
 // Module: aes128_axi_top  (v2)
 // Description: AES-128 IP with AXI4-Lite, supports enc and dec
-//   Usage: write key → CTRL[2]=new_key → wait key_ready → write data
-//          → CTRL[0]=start → wait done → read result
+//   Usage: write key -> CTRL[2]=new_key -> wait key_ready -> write data
+//          -> CTRL[0]=start -> wait done -> read result
 //==============================================================================
 `timescale 1ns / 1ps
+`default_nettype none
 
 module aes128_axi_top #(
     parameter C_S_AXI_ADDR_WIDTH = 6,
@@ -40,29 +41,44 @@ module aes128_axi_top #(
     wire         start, new_key, enc_dec;
     wire         busy, done, key_ready;
 
-    axi4_lite_slave #(
-        .C_S_AXI_ADDR_WIDTH(C_S_AXI_ADDR_WIDTH),
-        .C_S_AXI_DATA_WIDTH(C_S_AXI_DATA_WIDTH)
+    // Khởi tạo Wrapper AXI4-Lite (Đã sửa tên module và parameter)
+    axil_aes128_slave #(
+        .ADDR_WIDTH(C_S_AXI_ADDR_WIDTH),
+        .DATA_WIDTH(C_S_AXI_DATA_WIDTH)
     ) u_axi_slave (
-        .S_AXI_ACLK    (S_AXI_ACLK),   .S_AXI_ARESETN (S_AXI_ARESETN),
-        .S_AXI_AWADDR  (S_AXI_AWADDR),  .S_AXI_AWPROT  (S_AXI_AWPROT),
-        .S_AXI_AWVALID (S_AXI_AWVALID), .S_AXI_AWREADY (S_AXI_AWREADY),
-        .S_AXI_WDATA   (S_AXI_WDATA),   .S_AXI_WSTRB   (S_AXI_WSTRB),
-        .S_AXI_WVALID  (S_AXI_WVALID),  .S_AXI_WREADY  (S_AXI_WREADY),
-        .S_AXI_BRESP   (S_AXI_BRESP),   .S_AXI_BVALID  (S_AXI_BVALID),
-        .S_AXI_BREADY  (S_AXI_BREADY),
-        .S_AXI_ARADDR  (S_AXI_ARADDR),  .S_AXI_ARPROT  (S_AXI_ARPROT),
-        .S_AXI_ARVALID (S_AXI_ARVALID), .S_AXI_ARREADY (S_AXI_ARREADY),
-        .S_AXI_RDATA   (S_AXI_RDATA),   .S_AXI_RRESP   (S_AXI_RRESP),
-        .S_AXI_RVALID  (S_AXI_RVALID),  .S_AXI_RREADY  (S_AXI_RREADY),
-        .data_bus      (data_bus),
-        .start         (start),
-        .new_key       (new_key),
-        .enc_dec       (enc_dec),
-        .busy          (busy),
-        .done          (done),
-        .key_ready     (key_ready),
-        .irq_out       (irq_done)
+        .clk             (S_AXI_ACLK),    
+        .aresetn         (S_AXI_ARESETN),
+        
+        .s_axil_awaddr   (S_AXI_AWADDR),  
+        .s_axil_awprot   (S_AXI_AWPROT),
+        .s_axil_awvalid  (S_AXI_AWVALID), 
+        .s_axil_awready  (S_AXI_AWREADY),
+        .s_axil_wdata    (S_AXI_WDATA),   
+        .s_axil_wstrb    (S_AXI_WSTRB),
+        .s_axil_wvalid   (S_AXI_WVALID),  
+        .s_axil_wready   (S_AXI_WREADY),
+        .s_axil_bresp    (S_AXI_BRESP),   
+        .s_axil_bvalid   (S_AXI_BVALID),
+        .s_axil_bready   (S_AXI_BREADY),
+        
+        .s_axil_araddr   (S_AXI_ARADDR),  
+        .s_axil_arprot   (S_AXI_ARPROT),
+        .s_axil_arvalid  (S_AXI_ARVALID), 
+        .s_axil_arready  (S_AXI_ARREADY),
+        .s_axil_rdata    (S_AXI_RDATA),   
+        .s_axil_rresp    (S_AXI_RRESP),
+        .s_axil_rvalid   (S_AXI_RVALID),  
+        .s_axil_rready   (S_AXI_RREADY),
+        
+        // Giao tiếp với AES Core
+        .data_bus        (data_bus),
+        .start           (start),
+        .new_key         (new_key),
+        .enc_dec         (enc_dec),
+        .busy            (busy),
+        .done            (done),
+        .key_ready       (key_ready),
+        .irq_out         (irq_done)
     );
 
     aes128_top u_aes_core (

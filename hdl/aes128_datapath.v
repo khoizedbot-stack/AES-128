@@ -166,7 +166,8 @@ module aes128_datapath (
 
                 S_DONE: begin
                     bus_oe_r <= 1'b1;
-		    done <=1'b1; 
+		            done <=1'b1; 
+                    final_round <= 1'b0;
 		    
                 end
             endcase
