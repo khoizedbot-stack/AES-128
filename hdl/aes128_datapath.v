@@ -15,9 +15,9 @@ module aes128_datapath (
     output wire [127:0] pt_out_fsm,
 
     // Status
-    output reg          busy,
-    output reg          done,
-    output reg          key_ready,
+    output wire          busy,        
+    output reg          done,        
+    output reg           key_ready,
 
     // Key schedule
     output reg          start_expand,
@@ -38,37 +38,73 @@ module aes128_datapath (
     output reg  [127:0] data_out
 );
 
-    reg [127:0] bus_out_r;
-    reg         bus_oe_r;
-    assign data_bus = (bus_oe_r && !start && !new_key) ? bus_out_r : 128'bz;
-    
+    // Trạng thái FSM
     localparam [1:0] S_IDLE    = 2'd0,
                      S_KEY_EXP = 2'd1,
                      S_ROUNDS  = 2'd2,
                      S_DONE    = 2'd3;
 
-    reg [1:0] state;
+    reg [1:0] state, next_state;  
     reg [3:0] round_cnt;
 
-    // Enc: round 1→10: K1→K10 | Dec: round 1→10: K9→K0
+    // Logic Bus
+    reg [127:0] bus_out_r;
+    reg         bus_oe_r;
+    assign data_bus = (bus_oe_r && !start && !new_key) ? bus_out_r : 128'bz; 
+
+    // Các tín hiệu Status gán tổ hợp để phản hồi tức thời
+   // assign done = (state == S_DONE); 
+    assign busy = (state != S_IDLE); 
+
+    // Function tính toán index cho Round Key
     function [3:0] calc_idx;
         input       mode;
         input [3:0] cnt;
-        calc_idx = mode ? (4'd10 - cnt) : cnt;
+        calc_idx = mode ? (4'd10 - cnt) : cnt; 
     endfunction
 
     reg [127:0] reg_key_in;
     reg [127:0] reg_pt_in;
-
     assign key_out_fsm = reg_key_in;
     assign pt_out_fsm  = reg_pt_in;
 
-
+    // 1. Khối chuyển trạng thái (Sequential)
     always @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
-            state        <= S_IDLE;
-            busy         <= 1'b0;
-            done         <= 1'b0;
+            state <= S_IDLE; 
+        end else begin
+            state <= next_state;
+        end
+    end
+
+    // 2. Khối tính toán trạng thái tiếp theo (Combinational)
+    always @(*) begin
+        next_state = state; // Giữ trạng thái mặc định
+        case (state)
+            S_IDLE: begin
+                if (new_key)	
+                    next_state = S_KEY_EXP;
+                else if (start && key_ready) 
+                    next_state = S_ROUNDS;
+            end
+            S_KEY_EXP: begin
+                if (!ks_busy && ks_key_ready) 
+                    next_state = S_IDLE; 
+            end
+            S_ROUNDS: begin
+                if (round_cnt == 4'd10) 
+                    next_state = S_DONE; 
+            end
+            S_DONE: begin
+                next_state = S_IDLE; 
+            end
+            default: next_state = S_IDLE;
+        endcase
+    end
+
+    
+    always @(posedge clk or negedge rst_n) begin
+        if (!rst_n) begin
             key_ready    <= 1'b0;
             start_expand <= 1'b0;
             enc_dec_r    <= 1'b0;
@@ -82,96 +118,57 @@ module aes128_datapath (
             reg_pt_in    <= 128'b0;
             bus_out_r    <= 128'b0;
             bus_oe_r     <= 1'b0;
+	    done	 <= 1'b0;
         end else begin
-
-            if (new_key || start) bus_oe_r <= 1'b0;
+            
             if (new_key) reg_key_in <= data_bus;
             if (start)   reg_pt_in  <= data_bus;
 
-            start_expand <= 1'b0;
-
             case (state)
-
-            // =============================================================
-            // S_IDLE
-            //   new_key              / start_expand=1, busy=1, key_ready=0  → S_KEY_EXP
-            //   start && key_ready   / latch enc_dec_r, busy=1 → S_ROUNDS
-            //   else                 / Λ                       → S_IDLE
-            // =============================================================
-            S_IDLE: begin
-                done <= 1'b0;
-                busy <= 1'b0;
-
-                if (new_key) begin
-                    start_expand <= 1'b1;
-                    key_ready    <= 1'b0;
-                    busy         <= 1'b1;
-                    state        <= S_KEY_EXP;
+                S_IDLE: begin
+           	    done <= 1'b0;
+                    if (new_key) begin
+			bus_oe_r <= 1'b0;
+			done <= 1'b0;
+                        start_expand <= 1'b1;
+                        key_ready    <= 1'b0;
+                    end else if (start && key_ready) begin
+			bus_oe_r <= 1'b0;
+                        enc_dec_r   <= enc_dec;
+                        use_initial <= 1'b1;
+                        round_idx   <= enc_dec ? 4'd10 : 4'd0;
+                        round_cnt   <= 4'd0;
+                    end
                 end
-                else if (start && key_ready) begin
-                    enc_dec_r   <= enc_dec;
-                    busy        <= 1'b1;
-                    use_initial <= 1'b1;
-                    round_idx   <= enc_dec ? 4'd10 : 4'd0;
-                    round_cnt   <= 4'd0;
-                    state       <= S_ROUNDS;
+
+                S_KEY_EXP: begin
+                    start_expand <= 1'b0;
+                    if (!ks_busy && ks_key_ready) key_ready <= 1'b1;
                 end
-            end
 
-            // =============================================================
-            // S_KEY_EXP
-            //   !ks_busy && ks_key_ready / busy=0, key_ready=1 → S_IDLE
-            //   else                     / Λ                   → S_KEY_EXP
-            // =============================================================
-            S_KEY_EXP: begin
-                if (!ks_busy && ks_key_ready) begin
-                    busy      <= 1'b0;
-                    key_ready <= 1'b1;
-                    state     <= S_IDLE;
+                S_ROUNDS: begin
+                    state_out <= next_state_in;
+                    if (round_cnt == 4'd0) begin
+                        use_initial <= 1'b0;
+                        round_cnt   <= 4'd1;
+                        round_idx   <= calc_idx(enc_dec_r, 4'd1);
+                    end else if (round_cnt == 4'd10) begin
+                        data_out  <= next_state_in;
+                        bus_out_r <= next_state_in;
+			
+                    end else begin
+                        round_cnt   <= round_cnt + 4'd1;
+                        round_idx   <= calc_idx(enc_dec_r, round_cnt + 4'd1);
+                        final_round <= (round_cnt + 4'd1 == 4'd10);
+			
+                    end
                 end
-            end
 
-            // =============================================================
-            // S_ROUNDS
-            //   round_cnt == 0  / latch initial AddRoundKey    → (cnt=1)
-            //   round_cnt == 10 / data_out=round_out, done=1   → S_DONE
-            //   1 ≤ cnt < 10    / state_out=round_out, cnt++   → S_ROUNDS
-            // =============================================================
-            S_ROUNDS: begin
-                state_out <= next_state_in;
-
-                if (round_cnt == 4'd0) begin
-                    // Initial AddRoundKey done (use_initial was set in S_IDLE)
-                    use_initial <= 1'b0;
-                    round_cnt   <= 4'd1;
-                    round_idx   <= calc_idx(enc_dec_r, 4'd1);
-                    final_round <= 1'b0;
+                S_DONE: begin
+                    bus_oe_r <= 1'b1;
+		    done <=1'b1; 
+		    
                 end
-                else if (round_cnt == 4'd10) begin
-                    data_out  <= next_state_in;
-                    bus_out_r <= next_state_in; // Drive result to bus
-                    bus_oe_r  <= 1'b1;          // Bắt đầu chiếm bus để giữ kết quả
-                    busy      <= 1'b0;
-                    done      <= 1'b1;
-                    state     <= S_DONE;
-                end else begin
-                    round_cnt   <= round_cnt + 4'd1;
-                    round_idx   <= calc_idx(enc_dec_r, round_cnt + 4'd1);
-                    final_round <= (round_cnt + 4'd1 == 4'd10);
-                end
-            end
-
-            // =============================================================
-            // S_DONE
-            //   always / done=0 → S_IDLE
-            // =============================================================
-            S_DONE: begin
-                done  <= 1'b0;
-                state <= S_IDLE;
-            end
-
-            default: state <= S_IDLE;
-
             endcase
         end
     end
