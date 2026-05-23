@@ -1,57 +1,43 @@
 //==============================================================================
-// Module: expand_key_core (v4 - dọn lại)
-// Description: Tổ hợp thuần - nhận key hiện tại + rcon index, trả key mới
+// File: expand_key_core.v
+// Description: AES-128 Key Expansion - 1 round (combinational)
+//              Tất cả module gói trong 1 file duy nhất.
+//
 //==============================================================================
 `timescale 1ns / 1ps
 
-module expand_key_core (
-    input  wire [127:0] key_in,
-    input  wire [3:0]   rcon_idx,
-    output wire [127:0] key_out
+
+//==============================================================================
+// Module: rotword
+// Description: AES RotWord - xoay vòng byte trái 1 vị trí trên word 32-bit
+//              [B3 B2 B1 B0]  ->  [B2 B1 B0 B3]
+//==============================================================================
+module rotword (
+    input  wire [31:0] in_word,
+    output wire [31:0] out_word
 );
 
-    wire [31:0] w0 = key_in[127:96];
-    wire [31:0] w1 = key_in[95:64];
-    wire [31:0] w2 = key_in[63:32];
-    wire [31:0] w3 = key_in[31:0];
+    assign out_word = {in_word[23:0], in_word[31:24]};
 
-    // RotWord + SubWord
-    wire [31:0] rot_w3 = {w3[23:0], w3[31:24]};
-    wire [31:0] sub_w3 = {sbox(rot_w3[31:24]),
-                          sbox(rot_w3[23:16]),
-                          sbox(rot_w3[15:8]),
-                          sbox(rot_w3[7:0])};
+endmodule
 
-    // XOR với Rcon
-    wire [31:0] rcon_xor = {sub_w3[31:24] ^ rcon(rcon_idx), sub_w3[23:0]};
 
-    // Tạo 4 word mới
-    wire [31:0] w4 = w0 ^ rcon_xor;
-    wire [31:0] w5 = w4 ^ w1;
-    wire [31:0] w6 = w5 ^ w2;
-    wire [31:0] w7 = w6 ^ w3;
+//==============================================================================
+// Module: subword
+// Description: AES SubWord - thay thế 4 byte của word 32-bit qua S-Box
+//              S-Box AES (256 mục) khai báo dưới dạng function nội bộ.
+//==============================================================================
+module subword (
+    input  wire [31:0] in_word,
+    output wire [31:0] out_word
+);
 
-    assign key_out = {w4, w5, w6, w7};
+    assign out_word = { sbox(in_word[31:24]),
+                        sbox(in_word[23:16]),
+                        sbox(in_word[15:8]),
+                        sbox(in_word[7:0])  };
 
-    // ----- Rcon lookup -----
-    function [7:0] rcon;
-        input [3:0] idx;
-        case (idx)
-            4'd1:  rcon = 8'h01;
-            4'd2:  rcon = 8'h02;
-            4'd3:  rcon = 8'h04;
-            4'd4:  rcon = 8'h08;
-            4'd5:  rcon = 8'h10;
-            4'd6:  rcon = 8'h20;
-            4'd7:  rcon = 8'h40;
-            4'd8:  rcon = 8'h80;
-            4'd9:  rcon = 8'h1B;
-            4'd10: rcon = 8'h36;
-            default: rcon = 8'h00;
-        endcase
-    endfunction
-
-    // ----- S-Box lookup -----
+    // ----- S-Box AES (Rijndael forward S-Box) -----
     function [7:0] sbox;
         input [7:0] a;
         case (a)
@@ -122,5 +108,104 @@ module expand_key_core (
             default: sbox = 8'h00;
         endcase
     endfunction
+
+endmodule
+
+
+//==============================================================================
+// Module: add_rcon
+// Description: XOR hằng số Rcon vào byte cao nhất của word 32-bit.
+//              in_word  = [B3 B2 B1 B0]
+//              out_word = [B3 XOR Rcon(idx), B2, B1, B0]
+//              Bảng Rcon (Rcon[i] = 2^(i-1) trong GF(2^8)) khai báo nội bộ.
+//==============================================================================
+module add_rcon (
+    input  wire [31:0] in_word,
+    input  wire [3:0]  rcon_idx,
+    output wire [31:0] out_word
+);
+
+    assign out_word = { in_word[31:24] ^ rcon(rcon_idx), in_word[23:0] };
+
+    // ----- Rcon lookup -----
+    function [7:0] rcon;
+        input [3:0] idx;
+        case (idx)
+            4'd1:  rcon = 8'h01;
+            4'd2:  rcon = 8'h02;
+            4'd3:  rcon = 8'h04;
+            4'd4:  rcon = 8'h08;
+            4'd5:  rcon = 8'h10;
+            4'd6:  rcon = 8'h20;
+            4'd7:  rcon = 8'h40;
+            4'd8:  rcon = 8'h80;
+            4'd9:  rcon = 8'h1B;
+            4'd10: rcon = 8'h36;
+            default: rcon = 8'h00;
+        endcase
+    endfunction
+
+endmodule
+
+
+//==============================================================================
+// Module: expand_key_core (TOP)
+// Description: AES-128 Key Expansion - sinh ra round key mới từ round key
+//              hiện tại. Tổ hợp thuần, lắp từ 3 module con phía trên.
+//==============================================================================
+module expand_key_core (
+    input  wire [127:0] key_in,
+    input  wire [3:0]   rcon_idx,
+    output wire [127:0] key_out
+);
+
+    // ---------------------------------------------------------------
+    // Bước 1: Split key_in thành 4 word 32-bit
+    // ---------------------------------------------------------------
+    wire [31:0] w0 = key_in[127:96];
+    wire [31:0] w1 = key_in[95:64];
+    wire [31:0] w2 = key_in[63:32];
+    wire [31:0] w3 = key_in[31:0];
+
+    // ---------------------------------------------------------------
+    // Bước 2: RotWord(w3)
+    // ---------------------------------------------------------------
+    wire [31:0] rot_w3;
+    rotword u_rotword (
+        .in_word  (w3),
+        .out_word (rot_w3)
+    );
+
+    // ---------------------------------------------------------------
+    // Bước 3: SubWord(RotWord(w3))
+    // ---------------------------------------------------------------
+    wire [31:0] sub_w3;
+    subword u_subword (
+        .in_word  (rot_w3),
+        .out_word (sub_w3)
+    );
+
+    // ---------------------------------------------------------------
+    // Bước 4: Add Rcon  ->  kết quả của hàm g(w3)
+    // ---------------------------------------------------------------
+    wire [31:0] g_w3;
+    add_rcon u_add_rcon (
+        .in_word  (sub_w3),
+        .rcon_idx (rcon_idx),
+        .out_word (g_w3)
+    );
+
+    // ---------------------------------------------------------------
+    // Bước 5: XOR dây chuyền tạo 4 word mới
+    // ---------------------------------------------------------------
+    wire [31:0] w4 = w0 ^ g_w3;
+    wire [31:0] w5 = w4 ^ w1;
+    wire [31:0] w6 = w5 ^ w2;
+    wire [31:0] w7 = w6 ^ w3;
+
+    // ---------------------------------------------------------------
+    // Bước 6: Concat thành round key mới
+    // ---------------------------------------------------------------
+    assign key_out = {w4, w5, w6, w7};
 
 endmodule

@@ -35,7 +35,6 @@ module axil_aes128_wr #
     reg w_latched  = 0;
     reg bvalid_reg = 0;
     reg [1:0] bresp_reg = 2'b00;
-    reg wr_en_reg  = 0;
 
     reg [ADDR_WIDTH-1:0] awaddr_reg;
     reg [DATA_WIDTH-1:0] wdata_reg;
@@ -47,7 +46,7 @@ module axil_aes128_wr #
     assign s_axil_bvalid  = bvalid_reg;
     assign s_axil_bresp   = bresp_reg;
 
-    assign wr_en = wr_en_reg;
+    assign wr_en = aw_latched && w_latched && !bvalid_reg;
 
     assign wr_addr = awaddr_reg;
     assign wr_data = wdata_reg;
@@ -57,7 +56,6 @@ module axil_aes128_wr #
         if (!aresetn) begin
             aw_latched <= 1'b0;
             w_latched  <= 1'b0;
-            wr_en_reg  <= 1'b0;
             bvalid_reg <= 1'b0;
             bresp_reg  <= 2'b00;
         end else begin
@@ -73,10 +71,7 @@ module axil_aes128_wr #
                 wstrb_reg <= s_axil_wstrb; 
             end
 
-            if (aw_latched && w_latched && !wr_en_reg && !bvalid_reg) begin
-                wr_en_reg <= 1'b1;
-            end else if (wr_en_reg) begin
-                wr_en_reg  <= 1'b0;
+            if (wr_en) begin
                 aw_latched <= 1'b0; 
                 w_latched  <= 1'b0; 
                 

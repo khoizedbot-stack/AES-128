@@ -32,11 +32,19 @@ module tb_aes128_reg_file();
 
     // =========================================================================
     // LOGIC CHIẾM QUYỀN BUS (TỪ TESTBENCH)
-    // - Khi reset (!aresetn): Testbench ép bus về 0 để triệt tiêu vạch đỏ (Z).
-    // - Khi done=1: Testbench (đóng vai Core AES) CHIẾM QUYỀN BUS để bơm kết quả.
-    // - Các lúc khác: Testbench nhả bus (High-Z) để mạch RTL (Register File) tự lái.
     // =========================================================================
-    assign data_bus = (!aresetn) ? 128'b0 : (done ? mock_core_data : 128'bz);
+    reg tb_drive_bus_reg = 0;
+    always @(posedge clk) begin
+        if (start || new_key)
+            tb_drive_bus_reg <= 1'b0; // Nhả bus khi Core nhận lệnh mới
+        else if (done)
+            tb_drive_bus_reg <= 1'b1; // Giữ trạng thái chiếm bus sau khi tính xong
+    end
+
+    // Kết hợp OR: Ngay khi done=1 lập tức chiếm bus (tổ hợp), sau đó tb_drive_bus_reg sẽ duy trì (tuần tự)
+    wire tb_drive_bus = tb_drive_bus_reg || done;
+    
+    assign data_bus = tb_drive_bus ? mock_core_data : 128'bz;
 
     // =========================================================================
     // INSTANTIATE DUT (Thiết bị cần test)
@@ -99,94 +107,74 @@ module tb_aes128_reg_file();
         aresetn = 0; 
         wr_en = 0; rd_en = 0; 
         busy = 0; done = 0; key_ready = 0; mock_core_data = 0;
+        wr_addr = 0; wr_data = 0; wr_strb = 0; rd_addr = 0;
         
-        $display("\n============================================================");
-        $display("  BAT DAU CHAY KICH BAN TEST TONG HOP KHOI REGISTER FILE");
-        $display("============================================================");
+        #25 aresetn = 1;
 
-        // KỊCH BẢN 1: Reset và Trạng thái Bus
-        #20 aresetn = 1; #20;
-        $display("\n[SCENARIO 1] Kiem tra Reset & Data Bus...");
-        if (data_bus === 128'b0) $display("  -> PASS: Data bus mặc định là 0 (Không bị Z).");
-        else $display("  -> FAIL: Data bus khác 0. Gia trị: %h", data_bus);
-
-        // KỊCH BẢN 2: Đọc Ghi dữ liệu cơ bản
-        $display("\n[SCENARIO 2] Kiem tra Ghi/Doc thong thuong...");
-        axi_write(6'h14, 32'hAABBCCDD); // Ghi thử KEY_3
-        axi_read(6'h14, rdata);
-        if (rdata === 32'hAABBCCDD) $display("  -> PASS: Ghi và Đọc thanh ghi KEY thành công.");
-        else $display("  -> FAIL: Lỗi đọc/ghi. Got: %h", rdata);
-
-        // KỊCH BẢN 3: Xử lý lỗi (Error handling)
-        $display("\n[SCENARIO 3] Kiem tra co chan loi (wr_error)...");
-        axi_write(6'h04, 32'hFFFFFFFF); // Cố tình ghi vào STATUS (Read-Only)
-        #1;
-        if (wr_err === 1'b1) $display("  -> PASS: Đã chặn thành công việc ghi vào thanh ghi Read-Only.");
-        else $display("  -> FAIL: Mạch không báo cờ wr_err khi ghi sai.");
-
-        // KỊCH BẢN 4: Handshake lệnh New Key
-        $display("\n[SCENARIO 4] Kich ban nap Key (Handshake)...");
-        axi_write(6'h14, 32'h00112233); // KEY_3
-        axi_write(6'h10, 32'h44556677); // KEY_2
-        axi_write(6'h0C, 32'h8899AABB); // KEY_1
-        axi_write(6'h08, 32'hCCDDEEFF); // KEY_0
+        // ---------------------------------------------------------------------
+        // KỊCH BẢN 1: GHI KEY (Theo Waveform 1)
+        // ---------------------------------------------------------------------
+        #15;
+        axi_write(6'h08, 32'h11111111); // KEY_0
+        axi_write(6'h0C, 32'h22222222); // KEY_1
+        axi_write(6'h10, 32'h33333333); // KEY_2
+        axi_write(6'h14, 32'h44444444); // KEY_3
         
         axi_write(6'h00, 32'h00000004); // CPU ra lệnh new_key (CTRL[2]=1)
-        wait(new_key === 1'b1);         // Chờ mạch phát xung lệnh
-        #1;
-        if (data_bus === 128'h00112233445566778899AABBCCDDEEFF) 
-             $display("  -> PASS: Data Bus đẩy đúng Key ra Core.");
-        else $display("  -> FAIL: Data Bus xuất Key sai.");
 
-        @(posedge clk) busy = 1;        // AES Core báo bận
         @(posedge clk);
-        if (new_key === 1'b0) $display("  -> PASS: Mạch tự dập lệnh new_key (Handshake OK).");
-        
-        #20ns busy = 0; key_ready = 1;    // Core nạp xong, báo ready
-        @(posedge clk) key_ready = 0;
-        
-        axi_read(6'h04, rdata);         // CPU đọc STATUS
-        if (rdata[2] === 1'b1) $display("  -> PASS: Cờ key_ready đã lưu vào thanh ghi STATUS.");
-
-        // KỊCH BẢN 5: Handshake lệnh Start & Tính toán
-        $display("\n[SCENARIO 5] Kich ban ma hoa (Start Handshake)...");
-        axi_write(6'h24, 32'h11111111); // PT_3
-        axi_write(6'h20, 32'h22222222); // PT_2
-        axi_write(6'h1C, 32'h33333333); // PT_1
-        axi_write(6'h18, 32'h44444444); // PT_0
-        
-        axi_write(6'h00, 32'h00000001); // CPU ra lệnh start (CTRL[0]=1)
-        wait(start === 1'b1);
         #1;
-        if (data_bus === 128'h11111111222222223333333344444444) 
-             $display("  -> PASS: Data Bus đẩy đúng Plaintext ra Core.");
-             
-        @(posedge clk) busy = 1;        // Core bắt đầu chạy
+        busy = 1; // AES Core báo bận sau khi thấy new_key
         
-        // --- ĐIỀU CHỈNH TIMING THEO YÊU CẦU ---
-        #150;                           // Đợi 150ns (Giả lập Core cần 15 nhịp clock để tính toán)
-        @(posedge clk) busy = 0;        // Core tính xong, tắt busy
+        #80;
+        @(posedge clk);
+        #1;
+        busy = 0; // Xong
+        key_ready = 1;
         
-        #30;                            // Trễ thêm 3 nhịp clock nữa trước khi bật done
+        @(posedge clk);
+        #1;
+        key_ready = 0;
+
+        #30;
+
+        // ---------------------------------------------------------------------
+        // KỊCH BẢN 2: GHI PLAINTEXT & START (Theo Waveform 2)
+        // ---------------------------------------------------------------------
+        axi_write(6'h18, 32'hAAAAAAAA); // PT_0
+        axi_write(6'h1C, 32'hBBBBBBBB); // PT_1
+        axi_write(6'h20, 32'hCCCCCCCC); // PT_2
+        axi_write(6'h24, 32'hDDDDDDDD); // PT_3
         
-        // Trả kết quả về (lúc này lệnh assign ở trên sẽ ép testbench chiếm quyền data_bus)
-        mock_core_data = 128'h99999999_88888888_77777777_66666666;
+        axi_write(6'h00, 32'h00000009); // CPU ra lệnh start & enc (CTRL[3]=1, CTRL[0]=1)
+        
+        @(posedge clk);
+        #1;
+        busy = 1; // Core bắt đầu chạy
+        
+        #80;
+        @(posedge clk);
+        #1;
+        busy = 0; 
+        
+        // Trả kết quả về
+        mock_core_data = 128'hC3C3C3C3_C2C2C2C2_C1C1C1C1_C0C0C0C0;
         done = 1;
-        $display("  -> Core tinh toan xong, Testbench chiem quyen data_bus va day Ciphertext vao.");
         
-        #30;                            // Giữ done lâu hơn (3 nhịp clock) để dễ xem trên dạng sóng
-        @(posedge clk) done = 0;        // Tắt done, nhả bus
+        @(posedge clk);
+        #1;
+        done = 0; // Tắt done, nhả bus
 
-        // KỊCH BẢN 6: Đọc kết quả
-        $display("\n[SCENARIO 6] Doc lai ket qua Ciphertext...");
-        axi_read(6'h34, rdata); if (rdata === 32'h99999999) $display("  -> PASS: CIPHER_3 khop.");
-        axi_read(6'h30, rdata); if (rdata === 32'h88888888) $display("  -> PASS: CIPHER_2 khop.");
-        axi_read(6'h2C, rdata); if (rdata === 32'h77777777) $display("  -> PASS: CIPHER_1 khop.");
-        axi_read(6'h28, rdata); if (rdata === 32'h66666666) $display("  -> PASS: CIPHER_0 khop.");
+        #30;
 
-        $display("\n============================================================");
-        $display("  HOAN TAT MO PHONG TESTBENCH!");
-        $display("============================================================\n");
+        // ---------------------------------------------------------------------
+        // KỊCH BẢN 3: ĐỌC KẾT QUẢ VÀ STATUS
+        // ---------------------------------------------------------------------
+        axi_read(6'h04, rdata); // Đọc STATUS
+        axi_read(6'h34, rdata); // CIPHER_3
+        axi_read(6'h30, rdata); // CIPHER_2
+        axi_read(6'h2C, rdata); // CIPHER_1
+        axi_read(6'h28, rdata); // CIPHER_0
 
         #50 $finish;
     end

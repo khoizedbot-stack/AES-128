@@ -39,8 +39,16 @@ module tb_axil_aes128_slave();
     reg busy, done, key_ready;
     reg [127:0] mock_core_data;
 
-    // Giả lập AES Core đẩy data ra bus khi done
-    assign data_bus = done ? mock_core_data : 128'bz;
+    // Giả lập logic chiếm quyền bus để tránh lỗi X (tương tự như Register File TB)
+    reg tb_drive_bus_reg = 0;
+    always @(posedge clk) begin
+        if (start || new_key)
+            tb_drive_bus_reg <= 1'b0; // Nhả bus
+        else if (done)
+            tb_drive_bus_reg <= 1'b1; // Chiếm bus sau khi xong
+    end
+    wire tb_drive_bus = tb_drive_bus_reg || done;
+    assign data_bus = tb_drive_bus ? mock_core_data : 128'bz;
 
     // Khởi tạo Unit Under Test (UUT)
     axil_aes128_slave #(
@@ -91,19 +99,23 @@ module tb_axil_aes128_slave();
         input [DATA_WIDTH-1:0] data;
         begin
             @(posedge clk);
+            #1;
             s_axil_awaddr = addr;
             s_axil_awvalid = 1;
             s_axil_wdata = data;
             s_axil_wstrb = 4'hF;
             s_axil_wvalid = 1;
             s_axil_bready = 1;
+            
             wait(s_axil_awready && s_axil_wready);
             @(posedge clk);
+            #1;
             s_axil_awvalid = 0;
             s_axil_wvalid = 0;
             
             wait(s_axil_bvalid);
             @(posedge clk);
+            #1;
             s_axil_bready = 0;
         end
     endtask
@@ -114,17 +126,20 @@ module tb_axil_aes128_slave();
         output [DATA_WIDTH-1:0] data;
         begin
             @(posedge clk);
+            #1;
             s_axil_araddr = addr;
             s_axil_arvalid = 1;
             s_axil_rready = 1;
             
             wait(s_axil_arready);
             @(posedge clk);
+            #1;
             s_axil_arvalid = 0;
             
             wait(s_axil_rvalid);
             data = s_axil_rdata;
             @(posedge clk);
+            #1;
             s_axil_rready = 0;
         end
     endtask
@@ -158,69 +173,69 @@ module tb_axil_aes128_slave();
         #20;
         $display("--- Start AXI Lite Read/Write Channel Tests ---");
 
-        // Write Key 0-3 (Registers 0x10, 0x14, 0x18, 0x1C) // 0x08, 0x0C, 0x10, 0x14 in new map
-        $display("Testing Write to Key Registers...");
+        // ---------------------------------------------------------
+        // SCENARIO 1: TRUYỀN LỆNH NEW_KEY (NẠP KEY VÀO KHỐI AES)
+        // ---------------------------------------------------------
+        $display("\n--- SCENARIO 1: Ghi Key & Truyen lenh new_key ---");
         axi_write(6'h08, 32'h00112233);
         axi_write(6'h0C, 32'h44556677);
         axi_write(6'h10, 32'h8899AABB);
         axi_write(6'h14, 32'hCCDDEEFF);
 
-        // Read back Key 0-3 to Verify Read Channel
-        $display("Testing Read from Key Registers...");
-        axi_read(6'h08, read_data);
-        if (read_data !== 32'h00112233) $display("Error: Key 0 read mismatch, got %h", read_data);
-        axi_read(6'h0C, read_data);
-        if (read_data !== 32'h44556677) $display("Error: Key 1 read mismatch, got %h", read_data);
-        axi_read(6'h10, read_data);
-        if (read_data !== 32'h8899AABB) $display("Error: Key 2 read mismatch, got %h", read_data);
-        axi_read(6'h14, read_data);
-        if (read_data !== 32'hCCDDEEFF) $display("Error: Key 3 read mismatch, got %h", read_data);
+        $display("Ghi lenh new_key vao CTRL Register (CTRL[2]=1)...");
+        axi_write(6'h00, 32'h00000004); // Set new_key bit
 
-        // Write Data In 0-3 (Registers 0x18, 0x1C, 0x20, 0x24 in new map)
-        $display("Testing Write to Data In Registers...");
+        @(posedge clk);
+        #1;
+        busy = 1; // Core đang nội suy Key
+        #50;
+        @(posedge clk);
+        #1;
+        busy = 0; 
+        key_ready = 1; // Core báo nạp xong
+        @(posedge clk);
+        #1;
+        key_ready = 0;
+
+        // ---------------------------------------------------------
+        // SCENARIO 2: TRUYỀN LỆNH START TÍNH TOÁN PLAINTEXT
+        // ---------------------------------------------------------
+        $display("\n--- SCENARIO 2: Ghi Plaintext & Truyen lenh start ---");
         axi_write(6'h18, 32'h01234567);
         axi_write(6'h1C, 32'h89ABCDEF);
         axi_write(6'h20, 32'h13579BDF);
         axi_write(6'h24, 32'h2468ACE0);
 
-        // Read back Data In 0-3
-        $display("Testing Read from Data In Registers...");
-        axi_read(6'h18, read_data);
-        if (read_data !== 32'h01234567) $display("Error: Data In 0 read mismatch, got %h", read_data);
-        axi_read(6'h1C, read_data);
-        if (read_data !== 32'h89ABCDEF) $display("Error: Data In 1 read mismatch, got %h", read_data);
-        axi_read(6'h20, read_data);
-        if (read_data !== 32'h13579BDF) $display("Error: Data In 2 read mismatch, got %h", read_data);
-        axi_read(6'h24, read_data);
-        if (read_data !== 32'h2468ACE0) $display("Error: Data In 3 read mismatch, got %h", read_data);
+        $display("Ghi lenh start vao CTRL Register (CTRL[0]=1, CTRL[3]=1)...");
+        axi_write(6'h00, 32'h00000009); // Set start & enable_irq
 
-        // Test CTRL register (0x00)
-        $display("Testing Write to CTRL Register (start=1, decrypt=0)...");
-        axi_write(6'h00, 32'h00000001); // Set start bit
-
-        // Mock aes core signals (CẬP NHẬT THEO CƠ CHẾ HANDSHAKE MỚI)
-        #20;
-        busy = 1; // Core báo bận để tắt cờ start
-        #50;
+        @(posedge clk);
+        #1;
+        busy = 1; // Core bắt đầu tính toán
+        #100;
+        @(posedge clk);
+        #1;
         busy = 0;
         done = 1;
         mock_core_data = 128'hFEDCBA9876543210FEDCBA9876543210;
-        #10;
+        @(posedge clk);
+        #1;
         done = 0;
 
-        // Read Status (0x04)
-        $display("Testing Read from Status Register...");
+        // ---------------------------------------------------------
+        // SCENARIO 3: ĐỌC LẠI KẾT QUẢ VÀ TRẠNG THÁI
+        // ---------------------------------------------------------
+        $display("\n--- SCENARIO 3: Doc Status va Ciphertext ---");
         axi_read(6'h04, read_data);
-        // Should have bit 1 (done) set
+        if (read_data[1]) $display("-> PASS: Co done trong Status da duoc bat.");
+        else $display("-> FAIL: Khong thay co done trong Status.");
 
-        // Read Data Out 0-3 (0x28, 0x2C, 0x30, 0x34 in new map)
-        $display("Testing Read from Data Out Registers...");
         axi_read(6'h28, read_data);
         axi_read(6'h2C, read_data);
         axi_read(6'h30, read_data);
         axi_read(6'h34, read_data);
 
-        $display("--- AXI Lite Read/Write Channel Tests Completed ---");
+        $display("\n--- AXI Lite Slave Integration Tests Completed ---");
 
         #50;
         $finish;

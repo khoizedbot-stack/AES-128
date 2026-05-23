@@ -48,7 +48,6 @@ module tb_axil_aes128_rd();
         s_axil_araddr = 0;
         s_axil_arvalid = 0;
         s_axil_rready = 0;
-        rd_data = 32'hDEADBEEF;
         rd_err = 0;
 
         #20;
@@ -57,20 +56,33 @@ module tb_axil_aes128_rd();
 
         // Test OK Read
         @(posedge clk);
-        s_axil_araddr = 6'h14;
+        #1; // Thêm trễ nhỏ để tránh gai (glitch) do thay đổi cùng lúc với sườn lên
+        s_axil_araddr = 6'h04;
         s_axil_arvalid = 1;
         s_axil_rready = 1;
         
+        // Mô phỏng đáp ứng của reg_file (combinational read)
         wait(s_axil_arready);
         @(posedge clk);
+        #1;
         s_axil_arvalid = 0;
 
         wait(s_axil_rvalid);
         @(posedge clk);
+        #1;
         s_axil_rready = 0;
         
-        #20;
+        #40;
         $display("tb_axil_aes128_rd completed");
         $finish;
+    end
+
+    // Giả lập Register File đọc bất đồng bộ (trả kết quả ngay khi có rd_addr)
+    always @(*) begin
+        case (rd_addr)
+            6'h04: rd_data = 32'h00000004;
+            6'h14: rd_data = 32'h11223344;
+            default: rd_data = 32'hDEADBEEF;
+        endcase
     end
 endmodule
