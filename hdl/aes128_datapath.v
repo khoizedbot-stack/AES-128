@@ -4,7 +4,7 @@ module aes128_datapath (
     input  wire         clk,
     input  wire         rst_n,
 
-    // Từ AXI
+    // Tá»« AXI
     input  wire         start,
     input  wire         new_key,
     input  wire         enc_dec,
@@ -16,7 +16,7 @@ module aes128_datapath (
 
     // Status
     output wire          busy,        
-    output reg          done,        
+    output wire          done,        
     output reg           key_ready,
 
     // Key schedule
@@ -38,7 +38,7 @@ module aes128_datapath (
     output reg  [127:0] data_out
 );
 
-    // Trạng thái FSM
+    // Tráº¡ng thÃ¡i FSM
     localparam [1:0] S_IDLE    = 2'd0,
                      S_KEY_EXP = 2'd1,
                      S_ROUNDS  = 2'd2,
@@ -50,13 +50,12 @@ module aes128_datapath (
     // Logic Bus
     reg [127:0] bus_out_r;
     reg         bus_oe_r;
-    assign data_bus = (bus_oe_r && !start && !new_key) ? bus_out_r : 128'bz; 
+    assign data_bus = ( (bus_oe_r || done)  && !start && !new_key) ? bus_out_r : 128'bz; 
 
-    // Các tín hiệu Status gán tổ hợp để phản hồi tức thời
-   // assign done = (state == S_DONE); 
-    assign busy = (state != S_IDLE); 
+     
+    assign busy = (state != S_IDLE) && (state != S_DONE) ; 
 
-    // Function tính toán index cho Round Key
+    // Function tÃ­nh toÃ¡n index cho Round Key
     function [3:0] calc_idx;
         input       mode;
         input [3:0] cnt;
@@ -68,7 +67,7 @@ module aes128_datapath (
     assign key_out_fsm = reg_key_in;
     assign pt_out_fsm  = reg_pt_in;
 
-    // 1. Khối chuyển trạng thái (Sequential)
+    // 1. Khá»i chuyá»n tráº¡ng thÃ¡i (Sequential)
     always @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
             state <= S_IDLE; 
@@ -77,9 +76,9 @@ module aes128_datapath (
         end
     end
 
-    // 2. Khối tính toán trạng thái tiếp theo (Combinational)
+    // 2. Khá»i tÃ­nh toÃ¡n tráº¡ng thÃ¡i tiáº¿p theo (Combinational)
     always @(*) begin
-        next_state = state; // Giữ trạng thái mặc định
+        next_state = state; // Giá»¯ tráº¡ng thÃ¡i máº·c Äá»nh
         case (state)
             S_IDLE: begin
                 if (new_key)	
@@ -95,7 +94,7 @@ module aes128_datapath (
                 if (round_cnt == 4'd10) 
                     next_state = S_DONE; 
             end
-            S_DONE: begin
+            S_DONE: begin 
                 next_state = S_IDLE; 
             end
             default: next_state = S_IDLE;
@@ -117,8 +116,8 @@ module aes128_datapath (
             reg_key_in   <= 128'b0;
             reg_pt_in    <= 128'b0;
             bus_out_r    <= 128'b0;
-            bus_oe_r     <= 1'b0;
-	    done	 <= 1'b0;
+           // bus_oe_r     <= 1'b0;
+	   // done	 <= 1'b0;
         end else begin
             
             if (new_key) reg_key_in <= data_bus;
@@ -126,10 +125,10 @@ module aes128_datapath (
 
             case (state)
                 S_IDLE: begin
-           	    done <= 1'b0;
+           	   // done <= 1'b0;
                     if (new_key) begin
 			bus_oe_r <= 1'b0;
-			done <= 1'b0;
+			//done <= 1'b0;
                         start_expand <= 1'b1;
                         key_ready    <= 1'b0;
                     end else if (start && key_ready) begin
@@ -160,18 +159,21 @@ module aes128_datapath (
                         round_cnt   <= round_cnt + 4'd1;
                         round_idx   <= calc_idx(enc_dec_r, round_cnt + 4'd1);
                         final_round <= (round_cnt + 4'd1 == 4'd10);
-			
+			                  
                     end
                 end
-
+                  
                 S_DONE: begin
-                    bus_oe_r <= 1'b1;
-		            done <=1'b1; 
+                     bus_oe_r <= 1'b1;
+		                 // done <=1'b1; 
                     final_round <= 1'b0;
 		    
                 end
             endcase
         end
     end
-
+ assign done = (state == S_DONE); 
+//assign bus_oe_r = (state == S_DONE);
 endmodule
+
+
