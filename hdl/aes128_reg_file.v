@@ -8,20 +8,20 @@ module crypto_reg_file #(
     input  wire clk,
     input  wire rst_n,
     
-    // Nối với Write Ctrl
+    // Ná»‘i vá»›i Write Ctrl
     input  wire wr_en,
     input  wire [ADDR_WIDTH-1:0] wr_addr,
     input  wire [DATA_WIDTH-1:0] wr_data,
     input  wire [(DATA_WIDTH/8)-1:0] wr_strb,
     output wire wr_error,
     
-    // Nối với Read Ctrl
+    // Ná»‘i vá»›i Read Ctrl
     input  wire rd_en, 
     input  wire [ADDR_WIDTH-1:0] rd_addr,
     output reg  [DATA_WIDTH-1:0] rd_data,
     output wire rd_error,
     
-    // Nối với User App (Crypto)
+    // Ná»‘i vá»›i User App (Crypto)
     inout  wire [127:0] data_bus,
     output wire start,
     output wire new_key,
@@ -62,7 +62,7 @@ module crypto_reg_file #(
     reg         bus_oe_r;
 
     // =========================================================================
-    // TÍN HIỆU LỖI & KẾT NỐI TĨNH
+    // TÃ�N HIá»†U Lá»–I & Káº¾T Ná»�I TÄ¨NH
     // =========================================================================
     assign wr_error = !((wr_addr == ADDR_CTRL) || 
                         (wr_addr >= ADDR_KEY_0 && wr_addr <= ADDR_KEY_3) ||
@@ -73,7 +73,7 @@ module crypto_reg_file #(
     assign irq_out  = done & reg_ctrl[3];
 
     // =========================================================================
-    // HÀM APPLY WSTRB
+    // HÃ€M APPLY WSTRB
     // =========================================================================
     function [31:0] apply_wstrb;
         input [31:0] old_data, new_data;
@@ -88,7 +88,7 @@ module crypto_reg_file #(
 
 
     // =========================================================================
-    // KHỐI 1: XỬ LÝ GIAO TIẾP AES 128 (PROCESS BLOCK)
+    // KHá»�I 1: Xá»¬ LÃ� GIAO TIáº¾P AES 128 (PROCESS BLOCK)
     // =========================================================================
     reg start_r, new_key_r;
     assign start    = start_r;
@@ -100,12 +100,16 @@ module crypto_reg_file #(
             start_r      <= 1'b0;
             new_key_r    <= 1'b0;
             bus_out_r    <= 128'b0;
-            bus_oe_r     <= 1'b1;   // <--- SỬA Ở ĐÂY: Cho phép khối AXI chiếm quyền ép data_bus = 0 lúc reset
+            bus_oe_r     <= 1'b1;   // <--- Sá»¬A á»ž Ä�Ã‚Y: Cho phÃ©p khá»‘i AXI chiáº¿m quyá»�n Ã©p data_bus = 0 lÃºc reset
             reg_status   <= 32'h0;
             reg_cipher_0 <= 32'h0; reg_cipher_1 <= 32'h0;
             reg_cipher_2 <= 32'h0; reg_cipher_3 <= 32'h0;
         end else begin
-            // --- 1. KÍCH HOẠT LỆNH ---
+            // start_r chỉ là pulse 1 chu kỳ.
+            // Không chờ busy kéo xuống nữa, vì busy phản hồi trễ 1 clock.
+            start_r <= 1'b0;
+
+            // --- 1. KÃ�CH HOáº T Lá»†NH ---
             if (reg_ctrl[0] && !busy) begin
                 start_r   <= 1'b1;
                 bus_out_r <= {reg_pt_3,  reg_pt_2,  reg_pt_1,  reg_pt_0};
@@ -118,22 +122,21 @@ module crypto_reg_file #(
                 bus_oe_r  <= 1'b1;
             end
 
-            // --- 2. HỦY LỆNH (ACKNOWLEDGE) ---
+            // --- 2. Há»¦Y Lá»†NH (ACKNOWLEDGE) ---
             if (busy) begin
-                start_r   <= 1'b0;
                 new_key_r <= 1'b0;
             end
 
-            // --- 3. BẮT KẾT QUẢ KHI XONG ---
+            // --- 3. Báº®T Káº¾T QUáº¢ KHI XONG ---
             if (done) begin
                 reg_cipher_0 <= data_bus[31:0];
                 reg_cipher_1 <= data_bus[63:32];
                 reg_cipher_2 <= data_bus[95:64];
                 reg_cipher_3 <= data_bus[127:96];
-                bus_oe_r     <= 1'b0; // Thu hồi quyền đẩy bus
+                bus_oe_r     <= 1'b0; // Thu há»“i quyá»�n Ä‘áº©y bus
             end
 
-            // --- 4. CẬP NHẬT STATUS FLAGS ---
+            // --- 4. Cáº¬P NHáº¬T STATUS FLAGS ---
             reg_status[0] <= busy;               
             if (done)      reg_status[1] <= 1'b1;
             if (key_ready) reg_status[2] <= 1'b1;
@@ -145,7 +148,7 @@ module crypto_reg_file #(
 
 
     // =========================================================================
-    // KHỐI 2: LOGIC XỬ LÝ GHI TỪ AXI MASTER (WRITE BLOCK)
+    // KHá»�I 2: LOGIC Xá»¬ LÃ� GHI Tá»ª AXI MASTER (WRITE BLOCK)
     // =========================================================================
     always @(posedge clk) begin
         if (!rst_n) begin
@@ -177,7 +180,7 @@ module crypto_reg_file #(
 
 
     // =========================================================================
-    // KHỐI 3: LOGIC ĐỌC TRẢ VỀ AXI MASTER (READ BLOCK)
+    // KHá»�I 3: LOGIC Ä�á»ŒC TRáº¢ Vá»€ AXI MASTER (READ BLOCK)
     // =========================================================================
     always @(*) begin
         case (rd_addr)
