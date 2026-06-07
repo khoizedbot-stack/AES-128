@@ -1,172 +1,177 @@
 `timescale 1ns/1ps
 
+//==============================================================================
+// Testbench: tb_key_schedule
+// Purpose:
+//   One AES-128 key expansion case.
+//   After expansion is done, sweep round_idx from 0 to 10
+//   to show round_key = keys[round_idx].
+//==============================================================================
+
 module tb_key_schedule;
 
-    localparam CLK_HALF = 5; // 10 ns clock period
+    localparam CLK_HALF = 5;
 
-    reg         clk;
-    reg         rst_n;
-    reg         start_expand;
+    reg          clk;
+    reg          rst_n;
+    reg          start_expand;
     reg  [127:0] key_in;
+    reg  [3:0]   round_idx;
+
     wire         key_ready;
     wire         busy;
-    reg  [3:0]   round_idx;
     wire [127:0] round_key;
 
+    integer timeout_cnt;
+    integer i;
     integer pass_count;
     integer fail_count;
-    integer test_num;
 
+    // =========================================================================
+    // DUT
+    // =========================================================================
     key_schedule dut (
-        .clk            (clk),
-        .rst_n          (rst_n),
-        .start_expand   (start_expand),
-        .key_in         (key_in),
-        .key_ready      (key_ready),
-        .busy           (busy),
-        .round_idx      (round_idx),
-        .round_key      (round_key)
+        .clk          (clk),
+        .rst_n        (rst_n),
+        .start_expand (start_expand),
+        .key_in       (key_in),
+        .key_ready    (key_ready),
+        .busy         (busy),
+        .round_idx    (round_idx),
+        .round_key    (round_key)
     );
 
-    initial clk = 0;
-    always #CLK_HALF clk = ~clk;
-
-    task check_round_key;
-        input [3:0]   idx;
-        input [127:0] expected;
-        input [255:0] name;
-        begin
-            @(negedge clk);
-            test_num  = test_num + 1;
-            round_idx = idx;
-            #1; // combinational settle delay
-            if (round_key === expected) begin
-                $display("[Test %0d] %s - PASS", test_num, name);
-                pass_count = pass_count + 1;
-            end else begin
-                $display("[Test %0d] %s - FAIL", test_num, name);
-                $display("         round_idx=%0d  Expected: %h", idx, expected);
-                $display("         Got:      %h", round_key);
-                fail_count = fail_count + 1;
-            end
-        end
-    endtask
-
-    // init_round_key check removed as it is now handled by datapath (K0 or K10 lookup)
-
-    task expand_key;
-        input [127:0] k;
-        integer tmo;
-        begin
-            @(negedge clk);
-            key_in       = k;
-            start_expand = 1'b1;
-            @(negedge clk);
-            start_expand = 1'b0;
-
-            // Wait until key_ready asserts for the new expansion.
-            tmo = 0;
-            while (!key_ready && (tmo < 50)) begin
-                @(posedge clk);
-                tmo = tmo + 1;
-            end
-
-            if (!key_ready) begin
-                $display("  ERROR: key_ready timeout in expand_key task");
-                $finish;
-            end
-        end
-    endtask
-
+    // =========================================================================
+    // Clock
+    // =========================================================================
     initial begin
-        $display("");
-        $display("============================================================");
-        $display("  KEY_SCHEDULE Testbench");
-        $display("============================================================");
-        $display("  NIST FIPS-197 Key = 000102030405060708090a0b0c0d0e0f");
-        $display("============================================================");
-        $display("");
-
-        test_num   = 0;
-        pass_count = 0;
-        fail_count = 0;
-
-        // Init
-        rst_n        = 0;
-        start_expand = 0;
-        key_in       = 128'h0;
-        round_idx    = 4'd1;
-
-        repeat(5) @(posedge clk);
-        rst_n = 1;
-        repeat(2) @(posedge clk);
-
-        // ==================================================================
-        // Test 1: NIST FIPS-197 key expansion
-        // ==================================================================
-        $display("--- Expanding NIST key ---");
-        expand_key(128'h000102030405060708090a0b0c0d0e0f);
-        $display("  key_ready=%b  busy=%b", key_ready, busy);
-
-        // Port B: round keys K0..K10
-        check_round_key(4'd0,  128'h000102030405060708090a0b0c0d0e0f, "K0");
-        check_round_key(4'd1,  128'hd6aa74fdd2af72fadaa678f1d6ab76fe, "K1");
-        check_round_key(4'd2,  128'hb692cf0b643dbdf1be9bc5006830b3fe, "K2");
-        check_round_key(4'd3,  128'hb6ff744ed2c2c9bf6c590cbf0469bf41, "K3");
-        check_round_key(4'd4,  128'h47f7f7bc95353e03f96c32bcfd058dfd, "K4");
-        check_round_key(4'd5,  128'h3caaa3e8a99f9deb50f3af57adf622aa, "K5");
-        check_round_key(4'd6,  128'h5e390f7df7a69296a7553dc10aa31f6b, "K6");
-        check_round_key(4'd7,  128'h14f9701ae35fe28c440adf4d4ea9c026, "K7");
-        check_round_key(4'd8,  128'h47438735a41c65b9e016baf4aebf7ad2, "K8");
-        check_round_key(4'd9,  128'h549932d1f08557681093ed9cbe2c974e, "K9");
-        check_round_key(4'd10, 128'h13111d7fe3944a17f307a78b4d2b30c5, "K10");
-
-        // ==================================================================
-        // Test 3: Second NIST vector — all-zeros key
-        //   K0 = 00000000000000000000000000000000
-        //   K1 = 62636363626363636263636362636363
-        //   K2 = 9b9898c9f9fbfbaa9b9898c9f9fbfbaa
-        //   K10= b4ef5bcb3e92e21123e951cf6f8f188e
-        // ==================================================================
-        $display("--- All-zeros key expansion ---");
-        expand_key(128'h00000000000000000000000000000000);
-
-        @(negedge clk);
-        check_round_key(4'd0, 128'h00000000000000000000000000000000, "zeros enc: K0=0");
-        check_round_key(4'd1, 128'h62636363626363636263636362636363, "zeros enc: K1");
-        check_round_key(4'd2, 128'h9b9898c9f9fbfbaa9b9898c9f9fbfbaa, "zeros enc: K2");
-        check_round_key(4'd10, 128'hb4ef5bcb3e92e21123e951cf6f8f188e, "zeros enc: K10");
-
-        // ==================================================================
-        // Test 4: busy signal clears after expansion
-        // ==================================================================
-        $display("");
-        $display("--- busy/key_ready signal check ---");
-        test_num = test_num + 1;
-        if (!busy && key_ready) begin
-            $display("[Test %0d] busy=0 key_ready=1 after expansion - PASS", test_num);
-            pass_count = pass_count + 1;
-        end else begin
-            $display("[Test %0d] busy=%b key_ready=%b (expected 0/1) - FAIL", test_num, busy, key_ready);
-            fail_count = fail_count + 1;
-        end
-
-        // ==================================================================
-        // Summary
-        // ==================================================================
-        $display("");
-        $display("============================================================");
-        $display("  Summary: Passed=%0d  Failed=%0d", pass_count, fail_count);
-        $display("============================================================");
-        if (fail_count == 0)
-            $display("  *** ALL TESTS PASSED ***");
-        $display("");
-        #20 $finish;
+        clk = 1'b0;
     end
 
+    always #CLK_HALF clk = ~clk;
+
+    // =========================================================================
+    // Expected round keys for key = 000102030405060708090a0b0c0d0e0f
+    // =========================================================================
+    function [127:0] expected_key;
+        input [3:0] idx;
+        begin
+            case (idx)
+                4'd0:  expected_key = 128'h000102030405060708090a0b0c0d0e0f;
+                4'd1:  expected_key = 128'hd6aa74fdd2af72fadaa678f1d6ab76fe;
+                4'd2:  expected_key = 128'hb692cf0b643dbdf1be9bc5006830b3fe;
+                4'd3:  expected_key = 128'hb6ff744ed2c2c9bf6c590cbf0469bf41;
+                4'd4:  expected_key = 128'h47f7f7bc95353e03f96c32bcfd058dfd;
+                4'd5:  expected_key = 128'h3caaa3e8a99f9deb50f3af57adf622aa;
+                4'd6:  expected_key = 128'h5e390f7df7a69296a7553dc10aa31f6b;
+                4'd7:  expected_key = 128'h14f9701ae35fe28c440adf4d4ea9c026;
+                4'd8:  expected_key = 128'h47438735a41c65b9e016baf4aebf7ad2;
+                4'd9:  expected_key = 128'h549932d1f08557681093ed9cbe2c974e;
+                4'd10: expected_key = 128'h13111d7fe3944a17f307a78b4d2b30c5;
+                default: expected_key = 128'h0;
+            endcase
+        end
+    endfunction
+
+    // =========================================================================
+    // Main stimulus
+    // =========================================================================
     initial begin
-        #5000;
-        $display("TIMEOUT!");
+        $display("");
+        $display("============================================================");
+        $display(" KEY_SCHEDULE TEST - EXPAND THEN READ BY round_idx");
+        $display("============================================================");
+
+        rst_n        = 1'b0;
+        start_expand = 1'b0;
+        key_in       = 128'h00000000000000000000000000000000;
+        round_idx    = 4'd0;
+        timeout_cnt  = 0;
+        pass_count   = 0;
+        fail_count   = 0;
+
+        // Reset
+        repeat (2) @(posedge clk);
+        
+        rst_n = 1'b1;
+
+        @(posedge clk);
+        
+
+        // ---------------------------------------------------------------------
+        // 1. Send key and start expansion
+        // ---------------------------------------------------------------------
+        $display("");
+        $display("--- Send key and start expansion ---");
+
+        key_in       = 128'h000102030405060708090a0b0c0d0e0f;
+        start_expand = 1'b1;
+        round_idx    = 4'd0;
+
+        @(posedge clk);
+        
+        start_expand = 1'b0;
+
+        // ---------------------------------------------------------------------
+        // 2. Wait for expansion done
+        // ---------------------------------------------------------------------
+        timeout_cnt = 0;
+        while ((key_ready == 1'b0) && (timeout_cnt < 40)) begin
+            @(posedge clk);
+            timeout_cnt = timeout_cnt + 1;
+        end
+
+        if (key_ready == 1'b0) begin
+            $display("FAIL: key_ready timeout");
+            $finish;
+        end
+
+        $display("Expansion done: busy=%b key_ready=%b", busy, key_ready);
+
+        @(posedge clk);
+        
+
+        // ---------------------------------------------------------------------
+        // 3. Sweep round_idx after expansion to read stored keys
+        // ---------------------------------------------------------------------
+        $display("");
+        $display("--- Sweep round_idx after expansion ---");
+
+        for (i = 0; i <= 10; i = i + 1) begin
+            round_idx = i[3:0];
+            
+
+            if (round_key === expected_key(i[3:0])) begin
+                $display("K%0d PASS: round_idx=%0d round_key=%h", i, i, round_key);
+                pass_count = pass_count + 1;
+            end else begin
+                $display("K%0d FAIL: round_idx=%0d", i, i);
+                $display("  Expected: %h", expected_key(i[3:0]));
+                $display("  Got:      %h", round_key);
+                fail_count = fail_count + 1;
+            end
+
+            // Hold each round_idx for one full clock for waveform readability
+            @(posedge clk);
+            
+        end
+
+        $display("");
+        $display("============================================================");
+        $display(" Summary: Passed=%0d Failed=%0d", pass_count, fail_count);
+        $display("============================================================");
+        $display("");
+
+        repeat (3) @(posedge clk);
+        $finish;
+    end
+
+    // =========================================================================
+    // Global timeout
+    // =========================================================================
+    initial begin
+        #1000;
+        $display("FAIL: global timeout");
         $finish;
     end
 

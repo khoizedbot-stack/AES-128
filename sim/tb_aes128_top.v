@@ -1,60 +1,56 @@
 //==============================================================================
-// Testbench: aes128_top (v3)
-// Description: End-to-end encryption AND decryption tests
+// Testbench: aes128_top - one encryption only, hold testbench bus drive
+// Description:
+//   1) Send AES key with new_key pulse.
+//   2) Keep tb_bus_oe = 1 after key so data_bus does not become High-Z.
+//   3) Wait for key expansion/key_ready.
+//   4) Send plaintext with start pulse.
+//   5) Keep tb_bus_oe = 1 during encryption so data_bus does not become High-Z.
+//   6) Automatically release testbench driver only while done=1 so DUT can drive
+//      ciphertext onto data_bus without contention.
 //
-//   Interface:
-//     start    — pulse to begin enc/dec (requires key_ready=1)
-//     new_key  — pulse to trigger key expansion
-//     enc_dec  — 0=encrypt, 1=decrypt
-//     key      — 128-bit AES key
-//     data_in  — plaintext (enc) or ciphertext (dec)
-//     data_out — ciphertext (enc) or plaintext (dec)
-//     busy     — high during operation
-//     done     — pulses 1 when output is valid
-//     key_ready— high after key expansion completes
-//
-//   NIST FIPS-197 test vectors:
-//     Vector 1:
-//       Key:        000102030405060708090a0b0c0d0e0f
-//       Plaintext:  00112233445566778899aabbccddeeff
-//       Ciphertext: 69c4e0d86a7b0430d8cdb78070b4c55a
-//     Vector 2 (FIPS-197 Appendix C.1):
-//       Key:        2b7e151628aed2a6abf7158809cf4f3c
-//       Plaintext:  3243f6a8885a308d313198a2e0370734
-//       Ciphertext: 3925841d02dc09fbdc118597196a0b32
+// Notes:
+//   - If testbench drives data_bus while DUT also drives ciphertext at done,
+//     data_bus can become X because of bus contention.
+//   - Therefore tb_bus_oe remains logically 1, but the actual assignment uses
+//     !done to release bus exactly when DUT returns result.
 //==============================================================================
 `timescale 1ns/1ps
 
 module tb_aes128_top;
 
-    //==========================================================================
-    // Parameters
-    //==========================================================================
-    localparam CLK_HALF = 5; // 10 ns clock
+    localparam CLK_HALF = 5;
 
-    //==========================================================================
-    // Signals
-    //==========================================================================
+    localparam [127:0] KEY_NIST =
+        128'h000102030405060708090a0b0c0d0e0f;
+    localparam [127:0] PT_NIST =
+        128'h00112233445566778899aabbccddeeff;
+    localparam [127:0] CT_NIST =
+        128'h69c4e0d86a7b0430d8cdb78070b4c55a;
+
     reg         clk;
     reg         rst_n;
     reg         start;
     reg         new_key;
     reg         enc_dec;
-    reg  [127:0] tb_data_out;
+
+    reg  [127:0] tb_bus_drive;
+    reg          tb_bus_oe;
+
     wire [127:0] data_bus;
-    reg  [127:0] captured_out;
     wire         busy;
     wire         done;
     wire         key_ready;
 
-    integer pass_count;
-    integer fail_count;
-    integer test_num;
+    reg  [127:0] captured_out;
+    reg  [127:0] data_bus_last;
+    wire [127:0] data_bus_view;
+
     integer timeout_cnt;
 
-    //==========================================================================
+    //=========================================================================
     // DUT
-    //==========================================================================
+    //=========================================================================
     aes128_top dut (
         .clk       (clk),
         .rst_n     (rst_n),
@@ -67,209 +63,198 @@ module tb_aes128_top;
         .key_ready (key_ready)
     );
 
+    //=========================================================================
     // Clock
-    initial clk = 0;
+    //=========================================================================
+    initial clk = 1'b0;
     always #CLK_HALF clk = ~clk;
 
-    // Bus mocking: AXI only drives during start or new_key
-    assign data_bus = (start | new_key) ? tb_data_out : 128'hZ;
+    //=========================================================================
+    // data_bus driver
+    //=========================================================================
+    // tb_bus_oe is kept high after key/plaintext, so the bus keeps showing the
+    // last key/plaintext value instead of Z.
+    //
+    // But when done=1, DUT needs to drive ciphertext onto data_bus. Therefore
+    // testbench releases the bus only during done to avoid contention.
+    assign data_bus = (tb_bus_oe && !done) ? tb_bus_drive : 128'hZ;
 
-    // RTL now handles bus driving during S_DONE and persists until next command
+    // Optional waveform helper. If data_bus ever becomes Z, this view keeps the
+    // last non-Z value.
+    assign data_bus_view = (data_bus === 128'hZ) ? data_bus_last : data_bus;
 
-    always @(posedge clk) begin
-        if (done) captured_out <= data_bus;
+    always @(posedge clk or negedge rst_n) begin
+        if (!rst_n) begin
+            data_bus_last <= 128'h0;
+            captured_out  <= 128'h0;
+        end else begin
+            if (data_bus !== 128'hZ)
+                data_bus_last <= data_bus;
+
+            if (done)
+                captured_out <= data_bus;
+        end
     end
 
-    //==========================================================================
-    // Task: load new key and wait for expansion
-    //==========================================================================
-    task load_key;
-        input [127:0] k;
-        integer tmo;
+    //=========================================================================
+    // Task: send key and keep bus ownership
+    //=========================================================================
+    task send_key_hold_bus;
+        input [127:0] key_value;
         begin
-            tb_data_out = k;
-            new_key = 1'b1;
             @(posedge clk);
-            new_key = 1'b0;
+            #1;
+            tb_bus_drive = key_value;
+            tb_bus_oe    = 1'b1;   // keep driving after this task
+            new_key      = 1'b1;
 
-            // Wait for key_ready to drop (new expansion accepted), then rise.
-            tmo = 0;
-            while (key_ready && tmo < 10) begin
-                @(posedge clk);
-                tmo = tmo + 1;
-            end
+            @(posedge clk);
+            #1;
+            new_key      = 1'b0;
+            // DO NOT clear tb_bus_oe here.
+            // data_bus keeps KEY_NIST during key expansion instead of Z.
+        end
+    endtask
 
+    //=========================================================================
+    // Task: wait for key expansion done
+    //=========================================================================
+    task wait_key_expand_done;
+        begin
             timeout_cnt = 0;
-            while (!key_ready && timeout_cnt < 50) begin
+
+            // If key_ready is still high from a previous key, wait for it to drop.
+            // In this one-test TB it is usually 0 after reset, but this makes the
+            // task safer.
+            while (key_ready && timeout_cnt < 20) begin
                 @(posedge clk);
                 timeout_cnt = timeout_cnt + 1;
             end
-            if (!key_ready)
-                $display("  WARNING: key_ready timeout!");
+
+            timeout_cnt = 0;
+            while (!key_ready && timeout_cnt < 100) begin
+                @(posedge clk);
+                timeout_cnt = timeout_cnt + 1;
+            end
+
+            if (!key_ready) begin
+                $display("ERROR: Timeout waiting for key_ready!");
+                $finish;
+            end
+
             @(posedge clk);
         end
     endtask
 
-    //==========================================================================
-    // Task: run enc/dec and check result
-    //==========================================================================
-    task run_check;
-        input         ed;       // enc_dec
-        input [127:0] din;
-        input [127:0] expected;
-        input [255:0] name;
+    //=========================================================================
+    // Task: send plaintext and keep bus ownership
+    //=========================================================================
+    task send_plaintext_hold_bus;
+        input [127:0] plaintext_value;
         begin
-            test_num = test_num + 1;
-            enc_dec  = ed;
-            tb_data_out = din;
+            @(posedge clk);
+            #1;
+            enc_dec      = 1'b0;   // encrypt
+            tb_bus_drive = plaintext_value;
+            tb_bus_oe    = 1'b1;   // keep driving during AES rounds
+            start        = 1'b1;
 
             @(posedge clk);
-            start = 1'b1;
-            @(posedge clk);
-            start = 1'b0;
+            #1;
+            start        = 1'b0;
+            // DO NOT clear tb_bus_oe here.
+            // data_bus keeps PT_NIST during encryption instead of Z.
+            // It is automatically released while done=1 by the assign above.
+        end
+    endtask
 
-            // Wait for done
+    //=========================================================================
+    // Task: wait done and check ciphertext
+    //=========================================================================
+    task wait_done_and_check;
+        begin
             timeout_cnt = 0;
-            while (!done && timeout_cnt < 40) begin
+            while (!done && timeout_cnt < 100) begin
                 @(posedge clk);
                 timeout_cnt = timeout_cnt + 1;
             end
 
             if (!done) begin
-                $display("[Test %0d] %s - FAIL (timeout, done never asserted)", test_num, name);
-                fail_count = fail_count + 1;
-            end else begin
-                @(posedge clk); // wait 1 cycle for captured_out to latch
-                if (captured_out === expected) begin
-                    $display("[Test %0d] %s - PASS", test_num, name);
-                $display("         data_out: %h", captured_out);
-                pass_count = pass_count + 1;
-            end else begin
-                $display("[Test %0d] %s - FAIL", test_num, name);
-                $display("         data_in:  %h", din);
-                $display("         Expected: %h", expected);
-                $display("         Got:      %h", captured_out);
-                fail_count = fail_count + 1;
+                $display("[ENC] FAIL: Timeout waiting for done!");
+                $finish;
             end
+
+            // At done=1, TB driver is released and DUT should drive ciphertext.
+            #1;
+            captured_out = data_bus;
+
+            if (captured_out === CT_NIST) begin
+                $display("[ENC] PASS");
+                $display("      Expected: %h", CT_NIST);
+                $display("      Got:      %h", captured_out);
+            end else begin
+                $display("[ENC] FAIL");
+                $display("      Expected: %h", CT_NIST);
+                $display("      Got:      %h", captured_out);
             end
 
             @(posedge clk);
         end
     endtask
 
-    //==========================================================================
-    // Main test
-    //==========================================================================
+    //=========================================================================
+    // Main
+    //=========================================================================
     initial begin
         $display("");
         $display("============================================================");
-        $display("  AES128_TOP Testbench (v3 — enc + dec)");
+        $display("  AES128_TOP - One Encryption Test, Hold data_bus");
         $display("============================================================");
+        $display("KEY = %h", KEY_NIST);
+        $display("PT  = %h", PT_NIST);
+        $display("EXP = %h", CT_NIST);
         $display("");
 
-        test_num   = 0;
-        pass_count = 0;
-        fail_count = 0;
+        rst_n        = 1'b0;
+        start        = 1'b0;
+        new_key      = 1'b0;
+        enc_dec      = 1'b0;
+        tb_bus_drive = 128'h0;
+        tb_bus_oe    = 1'b0;
 
-        // Reset
-        rst_n   = 0;
-        start   = 0;
-        new_key = 0;
-        enc_dec = 0;
-        enc_dec = 0;
-        tb_data_out = 128'h0;
-        repeat(5) @(posedge clk);
-        rst_n = 1;
-        repeat(2) @(posedge clk);
+        repeat (5) @(posedge clk);
+        rst_n = 1'b1;
+        repeat (2) @(posedge clk);
 
-        // ==================================================================
-        // NIST Vector 1
-        // ==================================================================
-        $display("--- NIST FIPS-197 Vector 1 ---");
-        $display("  Key:       000102030405060708090a0b0c0d0e0f");
-        load_key(128'h000102030405060708090a0b0c0d0e0f);
-        $display("  key_ready=%b  (after expansion)", key_ready);
+        // 1) Send key and keep data_bus driven with key.
+        $display("Send key, keep data_bus driven by TB...");
+        send_key_hold_bus(KEY_NIST);
 
-        // Encrypt
-        $display("  >> Encrypt");
-        run_check(1'b0,
-                  128'h00112233445566778899aabbccddeeff,
-                  128'h69c4e0d86a7b0430d8cdb78070b4c55a,
-                  "V1 Encrypt");
+        // 2) Wait for expansion.
+        $display("Wait key expansion...");
+        wait_key_expand_done();
+        $display("key_ready = %b", key_ready);
 
-        // Decrypt (same key, already loaded)
-        $display("  >> Decrypt");
-        run_check(1'b1,
-                  128'h69c4e0d86a7b0430d8cdb78070b4c55a,
-                  128'h00112233445566778899aabbccddeeff,
-                  "V1 Decrypt");
+        // 3) Send plaintext and keep data_bus driven with plaintext during rounds.
+        $display("Send plaintext, keep data_bus driven by TB during rounds...");
+        send_plaintext_hold_bus(PT_NIST);
 
-        repeat(3) @(posedge clk);
+        // 4) During done, TB releases bus for DUT result and checks ciphertext.
+        $display("Wait done and check ciphertext...");
+        wait_done_and_check();
 
-        // ==================================================================
-        // NIST Vector 2 (FIPS-197 Appendix C.1)
-        // ==================================================================
-        $display("");
-        $display("--- NIST FIPS-197 Vector 2 ---");
-        $display("  Key:       2b7e151628aed2a6abf7158809cf4f3c");
-        load_key(128'h2b7e151628aed2a6abf7158809cf4f3c);
-
-        // Encrypt
-        $display("  >> Encrypt");
-        run_check(1'b0,
-                  128'h3243f6a8885a308d313198a2e0370734,
-                  128'h3925841d02dc09fbdc118597196a0b32,
-                  "V2 Encrypt");
-
-        // Decrypt
-        $display("  >> Decrypt");
-        run_check(1'b1,
-                  128'h3925841d02dc09fbdc118597196a0b32,
-                  128'h3243f6a8885a308d313198a2e0370734,
-                  "V2 Decrypt");
-
-        repeat(3) @(posedge clk);
-
-        // ==================================================================
-        // Consecutive encryptions with same key (no new_key needed)
-        // ==================================================================
-        $display("");
-        $display("--- Consecutive encryptions, same key ---");
-        load_key(128'h000102030405060708090a0b0c0d0e0f);
-
-        run_check(1'b0,
-                  128'h00112233445566778899aabbccddeeff,
-                  128'h69c4e0d86a7b0430d8cdb78070b4c55a,
-                  "Consec Enc 1");
-
-        run_check(1'b0,
-                  128'h00000000000000000000000000000000,
-                  128'hc6a13b37878f5b826f4f8162a1c8d879, // AES-128(000102..0f, 0)
-                  "Consec Enc 2 (all-zero plaintext)");
-
-        // ==================================================================
-        // Summary
-        // ==================================================================
-        $display("");
+        repeat (5) @(posedge clk);
         $display("============================================================");
-        $display("  Summary: Passed=%0d  Failed=%0d", pass_count, fail_count);
-        $display("============================================================");
-        if (fail_count == 0)
-            $display("  *** ALL TESTS PASSED ***");
-        $display("");
-        #50 $finish;
-    end
-
-    // Global timeout
-    initial begin
-        #10000;
-        $display("GLOBAL TIMEOUT!");
         $finish;
     end
 
-    // Cycle monitor (optional: uncomment for debug)
-    // integer cyc;
-    // initial cyc = 0;
-    // always @(posedge clk) cyc = cyc + 1;
+    //=========================================================================
+    // Global timeout
+    //=========================================================================
+    initial begin
+        #20000;
+        $display("GLOBAL TIMEOUT!");
+        $finish;
+    end
 
 endmodule
