@@ -24,7 +24,7 @@ module aes128_top (
     wire        ks_key_ready;
     wire [127:0] round_key;
 
-    wire        enc_dec_r;          // latched enc_dec từ datapath
+    wire        enc_dec_r;          // latched enc_dec from datapath
     wire        use_initial, final_round;
     wire [127:0] state_out;
     wire [127:0] enc_round_out, dec_round_out;

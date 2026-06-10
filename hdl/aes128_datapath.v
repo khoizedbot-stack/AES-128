@@ -4,7 +4,7 @@ module aes128_datapath (
     input  wire         clk,
     input  wire         rst_n,
 
-    // Tá»« AXI
+    // From AXI
     input  wire         start,
     input  wire         new_key,
     input  wire         enc_dec,
@@ -38,7 +38,7 @@ module aes128_datapath (
     output reg  [127:0] data_out
 );
 
-    // Tráº¡ng thÃ¡i FSM
+    // FSM States
     localparam [1:0] S_IDLE    = 2'd0,
                      S_KEY_EXP = 2'd1,
                      S_ROUNDS  = 2'd2,
@@ -55,7 +55,7 @@ module aes128_datapath (
      
     assign busy = (state != S_IDLE) && (state != S_DONE) ; 
 
-    // Function tÃ­nh toÃ¡n index cho Round Key
+    // Function to calculate Round Key index
     function [3:0] calc_idx;
         input       mode;
         input [3:0] cnt;
@@ -67,7 +67,7 @@ module aes128_datapath (
     assign key_out_fsm = reg_key_in;
     assign pt_out_fsm  = reg_pt_in;
 
-    // 1. Khá»i chuyá»n tráº¡ng thÃ¡i (Sequential)
+    // 1. State transition block (Sequential)
     always @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
             state <= S_IDLE; 
@@ -76,9 +76,9 @@ module aes128_datapath (
         end
     end
 
-    // 2. Khá»i tÃ­nh toÃ¡n tráº¡ng thÃ¡i tiáº¿p theo (Combinational)
+    // 2. Next state calculation block (Combinational)
     always @(*) begin
-        next_state = state; // Giá»¯ tráº¡ng thÃ¡i máº·c Äá»nh
+        next_state = state; // Keep default state
         case (state)
             S_IDLE: begin
                 if (new_key)	

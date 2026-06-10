@@ -1,7 +1,7 @@
 //==============================================================================
 // File: expand_key_core.v
 // Description: AES-128 Key Expansion - 1 round (combinational)
-//              Tất cả module gói trong 1 file duy nhất.
+//              All modules packed into a single file.
 //
 //==============================================================================
 `timescale 1ns / 1ps
@@ -9,8 +9,6 @@
 
 //==============================================================================
 // Module: rotword
-// Description: AES RotWord - xoay vòng byte trái 1 vị trí trên word 32-bit
-//              [B3 B2 B1 B0]  ->  [B2 B1 B0 B3]
 //==============================================================================
 module rotword (
     input  wire [31:0] in_word,
@@ -24,8 +22,6 @@ endmodule
 
 //==============================================================================
 // Module: subword
-// Description: AES SubWord - thay thế 4 byte của word 32-bit qua S-Box
-//              S-Box AES (256 mục) khai báo dưới dạng function nội bộ.
 //==============================================================================
 module subword (
     input  wire [31:0] in_word,
@@ -114,10 +110,6 @@ endmodule
 
 //==============================================================================
 // Module: add_rcon
-// Description: XOR hằng số Rcon vào byte cao nhất của word 32-bit.
-//              in_word  = [B3 B2 B1 B0]
-//              out_word = [B3 XOR Rcon(idx), B2, B1, B0]
-//              Bảng Rcon (Rcon[i] = 2^(i-1) trong GF(2^8)) khai báo nội bộ.
 //==============================================================================
 module add_rcon (
     input  wire [31:0] in_word,
@@ -150,8 +142,8 @@ endmodule
 
 //==============================================================================
 // Module: expand_key_core (TOP)
-// Description: AES-128 Key Expansion - sinh ra round key mới từ round key
-//              hiện tại. Tổ hợp thuần, lắp từ 3 module con phía trên.
+// Description: AES-128 Key Expansion - generate new round key from current round key.
+//              Combinational logic, built from the 3 submodules above.
 //==============================================================================
 module expand_key_core (
     input  wire [127:0] key_in,
@@ -159,35 +151,23 @@ module expand_key_core (
     output wire [127:0] key_out
 );
 
-    // ---------------------------------------------------------------
-    // Bước 1: Split key_in thành 4 word 32-bit
-    // ---------------------------------------------------------------
     wire [31:0] w0 = key_in[127:96];
     wire [31:0] w1 = key_in[95:64];
     wire [31:0] w2 = key_in[63:32];
     wire [31:0] w3 = key_in[31:0];
 
-    // ---------------------------------------------------------------
-    // Bước 2: RotWord(w3)
-    // ---------------------------------------------------------------
     wire [31:0] rot_w3;
     rotword u_rotword (
         .in_word  (w3),
         .out_word (rot_w3)
     );
 
-    // ---------------------------------------------------------------
-    // Bước 3: SubWord(RotWord(w3))
-    // ---------------------------------------------------------------
     wire [31:0] sub_w3;
     subword u_subword (
         .in_word  (rot_w3),
         .out_word (sub_w3)
     );
 
-    // ---------------------------------------------------------------
-    // Bước 4: Add Rcon  ->  kết quả của hàm g(w3)
-    // ---------------------------------------------------------------
     wire [31:0] g_w3;
     add_rcon u_add_rcon (
         .in_word  (sub_w3),
@@ -196,7 +176,7 @@ module expand_key_core (
     );
 
     // ---------------------------------------------------------------
-    // Bước 5: XOR dây chuyền tạo 4 word mới
+    // Step 5: Chained XOR to create 4 new words
     // ---------------------------------------------------------------
     wire [31:0] w4 = w0 ^ g_w3;
     wire [31:0] w5 = w4 ^ w1;
@@ -204,7 +184,7 @@ module expand_key_core (
     wire [31:0] w7 = w6 ^ w3;
 
     // ---------------------------------------------------------------
-    // Bước 6: Concat thành round key mới
+    // Step 6: Concatenate into new round key
     // ---------------------------------------------------------------
     assign key_out = {w4, w5, w6, w7};
 

@@ -8,20 +8,20 @@ module crypto_reg_file #(
     input  wire clk,
     input  wire rst_n,
     
-    // Ná»‘i vá»›i Write Ctrl
+    // Connect to Write Ctrl
     input  wire wr_en,
     input  wire [ADDR_WIDTH-1:0] wr_addr,
     input  wire [DATA_WIDTH-1:0] wr_data,
     input  wire [(DATA_WIDTH/8)-1:0] wr_strb,
     output wire wr_error,
     
-    // Ná»‘i vá»›i Read Ctrl
+    // Connect to Read Ctrl
     input  wire rd_en, 
     input  wire [ADDR_WIDTH-1:0] rd_addr,
     output reg  [DATA_WIDTH-1:0] rd_data,
     output wire rd_error,
     
-    // Ná»‘i vá»›i User App (Crypto)
+    // Connect to User App (Crypto)
     inout  wire [127:0] data_bus,
     output wire start,
     output wire new_key,
@@ -62,18 +62,18 @@ module crypto_reg_file #(
     reg         bus_oe_r;
 
     // =========================================================================
-    // TÃ�N HIá»†U Lá»–I & Káº¾T Ná»�I TÄ¨NH
+    // ERROR SIGNALS & STATIC CONNECTIONS
     // =========================================================================
-    assign wr_error = !((wr_addr == ADDR_CTRL) || 
-                        (wr_addr >= ADDR_KEY_0 && wr_addr <= ADDR_KEY_3) ||
-                        (wr_addr >= ADDR_PLAINTEXT_0 && wr_addr <= ADDR_PLAINTEXT_3));
-    
-    assign rd_error = (rd_addr > ADDR_CIPHER_3);
+    assign rd_error  = (rd_addr > ADDR_CIPHER_3);
+    assign wr_error  = wr_en && !((wr_addr == ADDR_CTRL) ||
+                       (wr_addr >= ADDR_KEY_0       && wr_addr <= ADDR_KEY_3) ||
+                       (wr_addr >= ADDR_PLAINTEXT_0 && wr_addr <= ADDR_PLAINTEXT_3) ||
+                       (wr_addr >= ADDR_CIPHER_0    && wr_addr <= ADDR_CIPHER_3));
     assign enc_dec  = reg_ctrl[1];
     assign irq_out  = done & reg_ctrl[3];
 
     // =========================================================================
-    // HÃ€M APPLY WSTRB
+    // APPLY WSTRB FUNCTION
     // =========================================================================
     function [31:0] apply_wstrb;
         input [31:0] old_data, new_data;
@@ -88,7 +88,7 @@ module crypto_reg_file #(
 
 
     // =========================================================================
-    // KHá»�I 1: Xá»¬ LÃ� GIAO TIáº¾P AES 128 (PROCESS BLOCK)
+    // BLOCK 1: AES 128 INTERFACE PROCESSING (PROCESS BLOCK)
     // =========================================================================
     reg start_r, new_key_r;
     assign start    = start_r;
@@ -100,19 +100,16 @@ module crypto_reg_file #(
             start_r      <= 1'b0;
             new_key_r    <= 1'b0;
             bus_out_r    <= 128'b0;
-            bus_oe_r     <= 1'b1;   // <--- Sá»¬A á»ž Ä�Ã‚Y: Cho phÃ©p khá»‘i AXI chiáº¿m quyá»�n Ã©p data_bus = 0 lÃºc reset
+            bus_oe_r     <= 1'b1;   
             reg_status   <= 32'h0;
-            reg_cipher_0 <= 32'h0; reg_cipher_1 <= 32'h0;
-            reg_cipher_2 <= 32'h0; reg_cipher_3 <= 32'h0;
         end else begin
-            // start_r chỉ là pulse 1 chu kỳ.
-            // Không chờ busy kéo xuống nữa, vì busy phản hồi trễ 1 clock.
-            start_r <= 1'b0;
-
-            // --- 1. KÃ�CH HOáº T Lá»†NH ---
+            // --- 1. ACTIVATE COMMAND ---
             if (reg_ctrl[0] && !busy) begin
                 start_r   <= 1'b1;
-                bus_out_r <= {reg_pt_3,  reg_pt_2,  reg_pt_1,  reg_pt_0};
+                if (reg_ctrl[1] == 1'b0) // Encrypt
+                    bus_out_r <= {reg_pt_3,  reg_pt_2,  reg_pt_1,  reg_pt_0};
+                else                     // Decrypt
+                    bus_out_r <= {reg_cipher_3, reg_cipher_2, reg_cipher_1, reg_cipher_0};
                 bus_oe_r  <= 1'b1;
             end
             
@@ -122,21 +119,16 @@ module crypto_reg_file #(
                 bus_oe_r  <= 1'b1;
             end
 
-            // --- 2. Há»¦Y Lá»†NH (ACKNOWLEDGE) ---
-            if (busy) begin
-                new_key_r <= 1'b0;
-            end
+            // --- 2. CANCEL COMMAND (ACKNOWLEDGE) ---
+            if (start_r)   start_r   <= 1'b0;
+            if (new_key_r) new_key_r <= 1'b0;
 
-            // --- 3. Báº®T Káº¾T QUáº¢ KHI XONG ---
+            // --- 3. CAPTURE RESULT WHEN DONE ---
             if (done) begin
-                reg_cipher_0 <= data_bus[31:0];
-                reg_cipher_1 <= data_bus[63:32];
-                reg_cipher_2 <= data_bus[95:64];
-                reg_cipher_3 <= data_bus[127:96];
-                bus_oe_r     <= 1'b0; // Thu há»“i quyá»�n Ä‘áº©y bus
+                bus_oe_r     <= 1'b0; // Revoke bus drive permission
             end
 
-            // --- 4. Cáº¬P NHáº¬T STATUS FLAGS ---
+            // --- 4. UPDATE STATUS FLAGS ---
             reg_status[0] <= busy;               
             if (done)      reg_status[1] <= 1'b1;
             if (key_ready) reg_status[2] <= 1'b1;
@@ -148,7 +140,7 @@ module crypto_reg_file #(
 
 
     // =========================================================================
-    // KHá»�I 2: LOGIC Xá»¬ LÃ� GHI Tá»ª AXI MASTER (WRITE BLOCK)
+    // BLOCK 2: WRITE PROCESSING LOGIC FROM AXI MASTER (WRITE BLOCK)
     // =========================================================================
     always @(posedge clk) begin
         if (!rst_n) begin
@@ -157,30 +149,57 @@ module crypto_reg_file #(
             reg_key_2  <= 32'h0;  reg_key_3 <= 32'h0;
             reg_pt_0   <= 32'h0;  reg_pt_1  <= 32'h0;
             reg_pt_2   <= 32'h0;  reg_pt_3  <= 32'h0;
+            reg_cipher_0 <= 32'h0; reg_cipher_1 <= 32'h0;
+            reg_cipher_2 <= 32'h0; reg_cipher_3 <= 32'h0;
         end else begin
             if (reg_ctrl[0]) reg_ctrl[0] <= 1'b0;
             if (reg_ctrl[2]) reg_ctrl[2] <= 1'b0;
             
-            if (wr_en && !wr_error) begin
-                case (wr_addr)
-                    ADDR_CTRL:        reg_ctrl  <= apply_wstrb(reg_ctrl,  wr_data, wr_strb);
-                    ADDR_KEY_0:       reg_key_0 <= apply_wstrb(reg_key_0, wr_data, wr_strb);
-                    ADDR_KEY_1:       reg_key_1 <= apply_wstrb(reg_key_1, wr_data, wr_strb);
-                    ADDR_KEY_2:       reg_key_2 <= apply_wstrb(reg_key_2, wr_data, wr_strb);
-                    ADDR_KEY_3:       reg_key_3 <= apply_wstrb(reg_key_3, wr_data, wr_strb);
-                    ADDR_PLAINTEXT_0: reg_pt_0  <= apply_wstrb(reg_pt_0,  wr_data, wr_strb);
-                    ADDR_PLAINTEXT_1: reg_pt_1  <= apply_wstrb(reg_pt_1,  wr_data, wr_strb);
-                    ADDR_PLAINTEXT_2: reg_pt_2  <= apply_wstrb(reg_pt_2,  wr_data, wr_strb);
-                    ADDR_PLAINTEXT_3: reg_pt_3  <= apply_wstrb(reg_pt_3,  wr_data, wr_strb);
-                    default: ; 
-                endcase
+            if (wr_en) begin
+                if ((wr_addr == ADDR_CTRL) ||
+                    (wr_addr >= ADDR_KEY_0 && wr_addr <= ADDR_KEY_3) ||
+                    (wr_addr >= ADDR_PLAINTEXT_0 && wr_addr <= ADDR_PLAINTEXT_3) ||
+                    (wr_addr >= ADDR_CIPHER_0 && wr_addr <= ADDR_CIPHER_3)) begin
+                    
+                    case (wr_addr)
+                        ADDR_CTRL:        reg_ctrl  <= apply_wstrb(reg_ctrl,  wr_data, wr_strb);
+                        ADDR_KEY_0:       reg_key_0 <= apply_wstrb(reg_key_0, wr_data, wr_strb);
+                        ADDR_KEY_1:       reg_key_1 <= apply_wstrb(reg_key_1, wr_data, wr_strb);
+                        ADDR_KEY_2:       reg_key_2 <= apply_wstrb(reg_key_2, wr_data, wr_strb);
+                        ADDR_KEY_3:       reg_key_3 <= apply_wstrb(reg_key_3, wr_data, wr_strb);
+                        ADDR_PLAINTEXT_0: reg_pt_0  <= apply_wstrb(reg_pt_0,  wr_data, wr_strb);
+                        ADDR_PLAINTEXT_1: reg_pt_1  <= apply_wstrb(reg_pt_1,  wr_data, wr_strb);
+                        ADDR_PLAINTEXT_2: reg_pt_2  <= apply_wstrb(reg_pt_2,  wr_data, wr_strb);
+                        ADDR_PLAINTEXT_3: reg_pt_3  <= apply_wstrb(reg_pt_3,  wr_data, wr_strb);
+                        ADDR_CIPHER_0:    reg_cipher_0 <= apply_wstrb(reg_cipher_0, wr_data, wr_strb);
+                        ADDR_CIPHER_1:    reg_cipher_1 <= apply_wstrb(reg_cipher_1, wr_data, wr_strb);
+                        ADDR_CIPHER_2:    reg_cipher_2 <= apply_wstrb(reg_cipher_2, wr_data, wr_strb);
+                        ADDR_CIPHER_3:    reg_cipher_3 <= apply_wstrb(reg_cipher_3, wr_data, wr_strb);
+                        default: ; 
+                    endcase
+                end
+            end // close if (wr_en)
+
+            if (done) begin
+                if (reg_ctrl[1] == 1'b0) begin // Encrypt
+                    reg_cipher_0 <= data_bus[31:0];
+                    reg_cipher_1 <= data_bus[63:32];
+                    reg_cipher_2 <= data_bus[95:64];
+                    reg_cipher_3 <= data_bus[127:96];
+                end else begin                 // Decrypt
+                    reg_pt_0 <= data_bus[31:0];
+                    reg_pt_1 <= data_bus[63:32];
+                    reg_pt_2 <= data_bus[95:64];
+                    reg_pt_3 <= data_bus[127:96];
+                end
             end
         end
     end
 
 
     // =========================================================================
-    // KHá»�I 3: LOGIC Ä�á»ŒC TRáº¢ Vá»€ AXI MASTER (READ BLOCK)
+    // BLOCK 3: READ LOGIC RETURNING TO AXI MASTER (READ BLOCK)
+    // Combinational: rd_data valid ngay trong cung cycle voi rd_en
     // =========================================================================
     always @(*) begin
         case (rd_addr)

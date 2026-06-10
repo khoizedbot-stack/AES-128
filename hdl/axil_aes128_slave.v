@@ -17,7 +17,6 @@ module axil_aes128_slave #
 
     /* AXI-Lite Interface */
     input  wire [ADDR_WIDTH-1:0]  s_axil_awaddr,
-    input  wire [2:0]             s_axil_awprot,
     input  wire                   s_axil_awvalid,
     output wire                   s_axil_awready,
     input  wire [DATA_WIDTH-1:0]  s_axil_wdata,
@@ -28,7 +27,6 @@ module axil_aes128_slave #
     output wire                   s_axil_bvalid,
     input  wire                   s_axil_bready,
     input  wire [ADDR_WIDTH-1:0]  s_axil_araddr,
-    input  wire [2:0]             s_axil_arprot,
     input  wire                   s_axil_arvalid,
     output wire                   s_axil_arready,
     output wire [DATA_WIDTH-1:0]  s_axil_rdata,
@@ -36,7 +34,7 @@ module axil_aes128_slave #
     output wire                   s_axil_rvalid,
     input  wire                   s_axil_rready,
 
-    /* CẬP NHẬT: AES-128 Core Interface MỚI */
+    /* UPDATE: NEW AES-128 Core Interface */
     inout  wire [127:0]           data_bus,
     output wire                   start,
     output wire                   new_key,
@@ -47,7 +45,7 @@ module axil_aes128_slave #
     output wire                   irq_out
 );
 
-    // Dây nối nội bộ (Internal Wires)
+    // Internal Wires
     wire [ADDR_WIDTH-1:0] wr_addr;
     wire [DATA_WIDTH-1:0] wr_data;
     wire [STRB_WIDTH-1:0] wr_strb;
@@ -59,7 +57,7 @@ module axil_aes128_slave #
     wire [DATA_WIDTH-1:0] rd_data;
     wire                  rd_err;
 
-    // --- Khởi tạo Khối Write ---
+    // --- Instantiate Write Block ---
     axil_aes128_wr #(
         .DATA_WIDTH(DATA_WIDTH), .ADDR_WIDTH(ADDR_WIDTH)
     ) u_wr_ctrl (
@@ -70,7 +68,7 @@ module axil_aes128_slave #
         .wr_addr(wr_addr), .wr_data(wr_data), .wr_strb(wr_strb), .wr_en(wr_en), .wr_err(wr_err)
     );
 
-    // --- Khởi tạo Khối Read ---
+    // --- Instantiate Read Block ---
     axil_aes128_rd #(
         .DATA_WIDTH(DATA_WIDTH), .ADDR_WIDTH(ADDR_WIDTH)
     ) u_rd_ctrl (
@@ -80,12 +78,12 @@ module axil_aes128_slave #
         .rd_addr(rd_addr), .rd_en(rd_en), .rd_data(rd_data), .rd_err(rd_err)
     );
 
-    // --- CẬP NHẬT: Khởi tạo Khối Register File ---
+    // --- UPDATE: Instantiate Register File Block ---
     crypto_reg_file #(
         .DATA_WIDTH(DATA_WIDTH), .ADDR_WIDTH(ADDR_WIDTH)
     ) u_reg_file (
         .clk        (clk), 
-        .rst_n      (aresetn),      // Map aresetn của AXI sang rst_n của reg file
+        .rst_n      (aresetn),      // Map AXI aresetn to reg file rst_n
         
         // Write port
         .wr_addr    (wr_addr), 

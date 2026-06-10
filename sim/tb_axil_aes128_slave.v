@@ -11,14 +11,12 @@ module tb_axil_aes128_slave();
     reg clk;
     reg aresetn;
     reg [ADDR_WIDTH-1:0] s_axil_awaddr;
-    reg [2:0] s_axil_awprot;
     reg s_axil_awvalid;
     reg [DATA_WIDTH-1:0] s_axil_wdata;
     reg [STRB_WIDTH-1:0] s_axil_wstrb;
     reg s_axil_wvalid;
     reg s_axil_bready;
     reg [ADDR_WIDTH-1:0] s_axil_araddr;
-    reg [2:0] s_axil_arprot;
     reg s_axil_arvalid;
     reg s_axil_rready;
 
@@ -58,7 +56,6 @@ module tb_axil_aes128_slave();
         .clk(clk),
         .aresetn(aresetn),
         .s_axil_awaddr(s_axil_awaddr),
-        .s_axil_awprot(s_axil_awprot),
         .s_axil_awvalid(s_axil_awvalid),
         .s_axil_awready(s_axil_awready),
         .s_axil_wdata(s_axil_wdata),
@@ -69,7 +66,6 @@ module tb_axil_aes128_slave();
         .s_axil_bvalid(s_axil_bvalid),
         .s_axil_bready(s_axil_bready),
         .s_axil_araddr(s_axil_araddr),
-        .s_axil_arprot(s_axil_arprot),
         .s_axil_arvalid(s_axil_arvalid),
         .s_axil_arready(s_axil_arready),
         .s_axil_rdata(s_axil_rdata),
@@ -99,7 +95,7 @@ module tb_axil_aes128_slave();
         input [DATA_WIDTH-1:0] data;
         begin
             @(posedge clk);
-            #1;
+
             s_axil_awaddr = addr;
             s_axil_awvalid = 1;
             s_axil_wdata = data;
@@ -107,15 +103,17 @@ module tb_axil_aes128_slave();
             s_axil_wvalid = 1;
             s_axil_bready = 1;
             
-            wait(s_axil_awready && s_axil_wready);
-            @(posedge clk);
-            #1;
+            while (!(s_axil_awready && s_axil_wready)) begin
+                @(posedge clk);
+
+            end
             s_axil_awvalid = 0;
             s_axil_wvalid = 0;
             
-            wait(s_axil_bvalid);
-            @(posedge clk);
-            #1;
+            while (!(s_axil_bvalid && s_axil_bready)) begin
+                @(posedge clk);
+
+            end
             s_axil_bready = 0;
         end
     endtask
@@ -126,20 +124,22 @@ module tb_axil_aes128_slave();
         output [DATA_WIDTH-1:0] data;
         begin
             @(posedge clk);
-            #1;
+
             s_axil_araddr = addr;
             s_axil_arvalid = 1;
             s_axil_rready = 1;
             
-            wait(s_axil_arready);
-            @(posedge clk);
-            #1;
+            while (!s_axil_arready) begin
+                @(posedge clk);
+
+            end
             s_axil_arvalid = 0;
             
-            wait(s_axil_rvalid);
+            while (!(s_axil_rvalid && s_axil_rready)) begin
+                @(posedge clk);
+
+            end
             data = s_axil_rdata;
-            @(posedge clk);
-            #1;
             s_axil_rready = 0;
         end
     endtask
@@ -151,14 +151,12 @@ module tb_axil_aes128_slave();
         // Initialize Inputs
         aresetn = 0;
         s_axil_awaddr = 0;
-        s_axil_awprot = 0;
         s_axil_awvalid = 0;
         s_axil_wdata = 0;
         s_axil_wstrb = 0;
         s_axil_wvalid = 0;
         s_axil_bready = 0;
         s_axil_araddr = 0;
-        s_axil_arprot = 0;
         s_axil_arvalid = 0;
         s_axil_rready = 0;
         
@@ -186,15 +184,12 @@ module tb_axil_aes128_slave();
         axi_write(6'h00, 32'h00000004); // Set new_key bit
 
         @(posedge clk);
-        #1;
         busy = 1; // Core đang nội suy Key
         #50;
         @(posedge clk);
-        #1;
         busy = 0; 
         key_ready = 1; // Core báo nạp xong
         @(posedge clk);
-        #1;
         key_ready = 0;
 
         // ---------------------------------------------------------
@@ -210,16 +205,13 @@ module tb_axil_aes128_slave();
         axi_write(6'h00, 32'h00000009); // Set start & enable_irq
 
         @(posedge clk);
-        #1;
         busy = 1; // Core bắt đầu tính toán
         #100;
         @(posedge clk);
-        #1;
         busy = 0;
         done = 1;
         mock_core_data = 128'hFEDCBA9876543210FEDCBA9876543210;
         @(posedge clk);
-        #1;
         done = 0;
 
         // ---------------------------------------------------------
@@ -237,7 +229,7 @@ module tb_axil_aes128_slave();
 
         $display("\n--- AXI Lite Slave Integration Tests Completed ---");
 
-        #50;
+        #550;
         $finish;
     end
 endmodule
