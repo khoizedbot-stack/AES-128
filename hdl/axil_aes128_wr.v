@@ -53,12 +53,14 @@ module axil_aes128_wr #
     reg        wready_reg;
     reg        bvalid_reg;
     reg [1:0]  bresp_reg;
-    reg        aw_en;
-
     // Latch registers for addr/data/strb
     reg [ADDR_WIDTH-1:0] wr_addr_reg;
     reg [DATA_WIDTH-1:0] wr_data_reg;
     reg [STRB_WIDTH-1:0] wr_strb_reg;
+
+    // Flags to track if we have latched address/data for the current transaction
+    reg aw_latched;
+    reg w_latched;
 
     // Registered outputs
     assign s_axil_awready = awready_reg;
@@ -67,58 +69,65 @@ module axil_aes128_wr #
     assign s_axil_bresp   = bresp_reg;
 
     // -------------------------------------------------------------------------
-    // Detect: AW+W both valid, controller ready, ready not yet asserted
+    // Detect independent AW and W transactions
     // -------------------------------------------------------------------------
-    wire aw_w_detect = ~awready_reg && s_axil_awvalid && s_axil_wvalid && aw_en;
+    wire aw_en = ~awready_reg && s_axil_awvalid && ~aw_latched;
+    wire w_en  = ~wready_reg  && s_axil_wvalid  && ~w_latched;
 
     // -------------------------------------------------------------------------
-    // AWREADY: Registered, pulse 1 cycle khi detect
-    // aw_en: cho phep nhan write moi, re-enable khi B consumed
+    // AW Channel: Latch address independently
     // -------------------------------------------------------------------------
     always @(posedge clk) begin
         if (!aresetn) begin
             awready_reg <= 1'b0;
-            aw_en       <= 1'b1;
-        end else if (aw_w_detect) begin
-            awready_reg <= 1'b1;
-            aw_en       <= 1'b0;
-        end else if (bvalid_reg && s_axil_bready) begin
-            aw_en       <= 1'b1;
-            awready_reg <= 1'b0;
+            aw_latched  <= 1'b0;
+            wr_addr_reg <= {ADDR_WIDTH{1'b0}};
         end else begin
-            awready_reg <= 1'b0;
+            if (aw_en) begin
+                awready_reg <= 1'b1;
+                wr_addr_reg <= s_axil_awaddr;
+                aw_latched  <= 1'b1;
+            end else begin
+                awready_reg <= 1'b0;
+                // Clear latched flag when transaction completes (BVALID & BREADY)
+                if (bvalid_reg && s_axil_bready) begin
+                    aw_latched <= 1'b0;
+                end
+            end
         end
     end
 
     // -------------------------------------------------------------------------
-    // WREADY: Registered, pulse 1 cycle dong bo voi AWREADY
+    // W Channel: Latch data independently
     // -------------------------------------------------------------------------
     always @(posedge clk) begin
-        if (!aresetn)
-            wready_reg <= 1'b0;
-        else if (aw_w_detect)
-            wready_reg <= 1'b1;
-        else
-            wready_reg <= 1'b0;
-    end
-
-    // -------------------------------------------------------------------------
-    // Latch AW+W data khi detect (cung posedge, NBA)
-    // -------------------------------------------------------------------------
-    always @(posedge clk) begin
-        if (aw_w_detect) begin
-            wr_addr_reg <= s_axil_awaddr;
-            wr_data_reg <= s_axil_wdata;
-            wr_strb_reg <= s_axil_wstrb;
+        if (!aresetn) begin
+            wready_reg  <= 1'b0;
+            w_latched   <= 1'b0;
+            wr_data_reg <= {DATA_WIDTH{1'b0}};
+            wr_strb_reg <= {STRB_WIDTH{1'b0}};
+        end else begin
+            if (w_en) begin
+                wready_reg  <= 1'b1;
+                wr_data_reg <= s_axil_wdata;
+                wr_strb_reg <= s_axil_wstrb;
+                w_latched   <= 1'b1;
+            end else begin
+                wready_reg <= 1'b0;
+                // Clear latched flag when transaction completes
+                if (bvalid_reg && s_axil_bready) begin
+                    w_latched <= 1'b0;
+                end
+            end
         end
     end
 
     // -------------------------------------------------------------------------
     // Register File interface
-    // wr_en: combinational tu registered ready (cao sau detect NBA)
-    // wr_addr/data/strb: tu latched registers
+    // wr_en: combinational, asserts for 1 cycle when both are latched
+    // wr_addr/data/strb: from latched registers
     // -------------------------------------------------------------------------
-    assign wr_en   = awready_reg && wready_reg;
+    assign wr_en   = aw_latched && w_latched && !bvalid_reg;
     assign wr_addr = wr_addr_reg;
     assign wr_data = wr_data_reg;
     assign wr_strb = wr_strb_reg;
